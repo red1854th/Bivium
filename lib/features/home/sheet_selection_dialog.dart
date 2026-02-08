@@ -124,11 +124,13 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
     }
     widget.onConfirm(FlashcardSet(
       title: _titleController.text.trim(),
+      description: '', // Added description
       sheetId: widget.sheetId,
       frontColIdx: _sourceColIdx,
       backColIdx: _targetColIdx,
       keyColIdx: _keyColIdx ?? -1,
       lastSynced: DateTime.now(),
+      lastAccessed: DateTime.now(), // Added lastAccessed
     ));
   }
 

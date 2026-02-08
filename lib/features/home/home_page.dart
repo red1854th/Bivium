@@ -9,6 +9,7 @@ import '../../services/google_drive_service.dart';
 import 'add_set_dialog.dart';
 import 'setting_page.dart';
 import 'package:bivium/features/detail/detail_page.dart';
+import 'package:bivium/features/home/edit_project_page.dart';
 
 // Top-level function to parse JSON in an isolate
 List<FlashcardSet> _parseFlashcardSets(String setsJson) {
@@ -32,7 +33,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   List<FlashcardSet> _sets = [];
-  bool _isGridView = true;
+
   bool _isLoading = true; // Add this new state variable
   late final GoogleDriveService _driveService;
   late final SharedPreferences _prefs; // Add this field
@@ -69,6 +70,9 @@ class _HomePageState extends State<HomePage> {
         _parseFlashcardSets,
         setsJson,
       );
+      loadedSets.sort(
+        (a, b) => b.lastAccessed.compareTo(a.lastAccessed),
+      ); // Sort by lastAccessed
       setState(() {
         _sets = loadedSets;
         _isLoading = false; // Set to false after data is loaded
@@ -166,19 +170,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
-                    icon: Icon(
-                      _isGridView ? Icons.grid_view : Icons.view_list,
-                      color: AppColors.cBrand600,
-                    ),
-                    onPressed: () => setState(() => _isGridView = !_isGridView),
-                    tooltip: 'Toggle View',
-                    style: IconButton.styleFrom(
-                      backgroundColor: AppColors.cBrand50,
-                      padding: const EdgeInsets.all(8),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
+
                   IconButton(
                     onPressed: () => _showAddDialog(context),
                     icon: const Icon(Icons.add, color: Colors.white),
@@ -227,8 +219,6 @@ class _HomePageState extends State<HomePage> {
                         ],
                       ),
                     )
-                  : _isGridView
-                  ? _buildGridView()
                   : _buildListView(),
             ),
           ],
@@ -302,7 +292,34 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right, color: AppColors.cSlate400),
+                  // Kebab menu button to navigate to EditProjectPage
+                  IconButton(
+                    icon: const Icon(Icons.more_vert, color: AppColors.cSlate400),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => EditProjectPage(
+                            set: s,
+                            allTitles: _sets.map((e) => e.title).toList(),
+                            onUpdate: (newTitle, newDescription) {
+                              setState(() {
+                                s.title = newTitle;
+                                s.description = newDescription;
+                              });
+                              _saveData();
+                            },
+                            onDelete: () {
+                              setState(() {
+                                _sets.removeWhere((set) => set.sheetId == s.sheetId);
+                              });
+                              _saveData();
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -312,103 +329,15 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildGridView() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return GridView.builder(
-      padding: const EdgeInsets.all(20),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.85,
-      ),
-      itemCount: _sets.length,
-      itemBuilder: (context, index) {
-        final s = _sets[index];
-        return InkWell(
-          onTap: () => _navigateToDetail(s, index),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.cDarkSurface : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.1 : 0.03),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.cBrand50,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.folder,
-                        color: AppColors.cBrand600,
-                        size: 20,
-                      ),
-                    ),
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.cGreen700,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                Text(
-                  s.title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                    color: isDark ? Colors.white : AppColors.cSlate900,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "${s.qcResults.length} issues",
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.cRed700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "Updated ${s.lastSynced.month}/${s.lastSynced.day}",
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Future<void> _navigateToDetail(FlashcardSet s, int index) async {
+    // Update lastAccessed before navigating
+    setState(() {
+      _sets[index].lastAccessed = DateTime.now();
+    });
+    await _saveData(); // Save the updated access time
+
+    if (!mounted) return;
+
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -424,7 +353,13 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
-    setState(() {});
+    // Refresh the state when returning from the detail page
+    // This will trigger a re-sort if _loadData is called again or if _sets is directly sorted
+    setState(() {
+      _sets.sort(
+        (a, b) => b.lastAccessed.compareTo(a.lastAccessed),
+      ); // Sort after returning
+    });
   }
 
   void _showAddDialog(BuildContext context) {
