@@ -1,0 +1,21 @@
+# gpt2ko → TFLite 변환 필수 의존성
+# Python 3.8+ 필요
+
+# 핵심 모델/변환 도구
+transformers>=4.30.0
+torch>=2.0.0
+numpy>=1.21.0
+
+# ONNX 변환 (TFLite 생성)
+onnx>=1.13.0
+onnxruntime>=1.14.0
+onnxruntime-tools>=1.7.0
+tf2onnx>=1.13.0
+
+# 선택사항 (속도 향상)
+accelerate>=0.20.0  # 대규모 모델 빠른 로드
+sentencepiece>=0.1.99  # SentencePiece 토크나이저
+
+# TFLite 변환
+tflite-runtime>=2.11.0
+black>=22.0.0
