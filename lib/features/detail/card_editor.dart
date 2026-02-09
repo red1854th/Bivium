@@ -47,7 +47,7 @@ class _CardEditorState extends State<CardEditor> {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color cardBg = widget.card.isFlagged
         ? (isDark ? const Color(0xFF4D4000) : const Color(0xFFFFF9C4))
-        : (isDark ? AppColors.cDarkSurface : AppColors.cSlate50);
+        : (isDark ? AppColors.cDarkBg : AppColors.cBg);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(10, 5, 10, 10),

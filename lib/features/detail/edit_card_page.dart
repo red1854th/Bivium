@@ -74,7 +74,7 @@ class _EditCardPageState extends State<EditCardPage> {
         _handlePop();
       },
       child: Scaffold(
-        backgroundColor: isDark ? AppColors.cDarkBg : AppColors.cBg,
+        backgroundColor: isDark ? AppColors.cDarkSurface : AppColors.cSlate50,
         appBar: AppBar(
           toolbarHeight: 30,
           leadingWidth: 48,
