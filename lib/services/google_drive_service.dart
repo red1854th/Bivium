@@ -144,9 +144,10 @@ class GoogleDriveService {
               ?.rgbColor;
           if (rgb != null) {
             flagged =
-                (rgb.red ?? 0) > 0.8 &&
-                (rgb.green ?? 0) > 0.8 &&
-                (rgb.blue ?? 0) < 0.6;
+                (rgb.red ?? 0) > 0.9 &&
+                (rgb.green ?? 0) > 0.9 &&
+                (rgb.blue ?? 0) > 0.6 &&
+                (rgb.blue ?? 0) < 0.8;
           }
         }
         final rawRow = rowValues

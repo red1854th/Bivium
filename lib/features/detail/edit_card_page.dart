@@ -1,10 +1,10 @@
-import 'package:bivium/models/flashcard.dart';
-import 'package:bivium/services/google_drive_service.dart';
-import 'package:bivium/features/detail/remark_page.dart';
-import 'package:bivium/core/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
+import 'package:bivium/models/flashcard.dart';
+import 'package:bivium/services/google_drive_service.dart';
+import 'package:bivium/core/theme.dart';
+import 'card_editor.dart';
 
 class EditCardPage extends StatefulWidget {
   final List<Flashcard> cards;
@@ -38,12 +38,9 @@ class _EditCardPageState extends State<EditCardPage> {
     _pageController = PageController(initialPage: _currentPageIndex);
   }
 
-  /// 서버 동기화 함수 (비동기 실행)
   void _saveChanges(int index) {
     if (index < 0 || index >= widget.cards.length) return;
-
     final card = widget.cards[index];
-    // 가독성을 위해 비동기 처리를 분리하여 실행
     widget.driveService
         .updateFlashcard(
           spreadsheetId: widget.setInfo.sheetId,
@@ -51,22 +48,13 @@ class _EditCardPageState extends State<EditCardPage> {
           setInfo: widget.setInfo,
           card: card,
         )
-        .catchError((e) {
-          debugPrint('백그라운드 저장 실패: $e');
-        });
+        .catchError((e) => debugPrint('백그라운드 저장 실패: $e'));
   }
 
-  /// 즉시 종료 처리
   void _handlePop() {
     FocusManager.instance.primaryFocus?.unfocus();
-
-    // 저장을 기다리지 않고 즉시 실행 (Fire-and-forget)
     _saveChanges(_currentPageIndex);
-
-    // 대기 없이 즉시 화면 이탈
-    if (mounted) {
-      Navigator.of(context).pop(widget.cards);
-    }
+    if (mounted) Navigator.of(context).pop(widget.cards);
   }
 
   @override
@@ -78,16 +66,15 @@ class _EditCardPageState extends State<EditCardPage> {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color bgColor = isDark ? AppColors.cDarkBg : AppColors.cBg;
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
+      onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         _handlePop();
       },
       child: Scaffold(
-        backgroundColor: bgColor,
+        backgroundColor: isDark ? AppColors.cDarkBg : AppColors.cBg,
         appBar: AppBar(
           toolbarHeight: 30,
           leadingWidth: 48,
@@ -117,193 +104,85 @@ class _EditCardPageState extends State<EditCardPage> {
           centerTitle: true,
         ),
         body: SafeArea(
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: widget.cards.length,
-            onPageChanged: (idx) {
-              int prevIdx = _currentPageIndex;
-              _saveChanges(prevIdx); // 이전 페이지 변경분 백그라운드 저장
-              if (mounted) setState(() => _currentPageIndex = idx);
-            },
-            itemBuilder: (context, index) {
-              return AnimatedBuilder(
-                animation: _pageController,
-                builder: (context, child) {
-                  double page = _pageController.hasClients
-                      ? (_pageController.page ?? index.toDouble())
-                      : index.toDouble();
-                  double angle = (page - index) * (math.pi / 35);
-                  return Transform.rotate(
-                    angle: angle,
-                    child: CardEditor(
-                      key: ValueKey('editor_${widget.cards[index].key}_$index'),
-                      card: widget.cards[index],
-                      cardIndex: index,
-                      setInfo: widget.setInfo,
-                      driveService: widget.driveService,
-                    ),
+          child: Stack(
+            children: [
+              // 메인 카드 뷰
+              PageView.builder(
+                controller: _pageController,
+                itemCount: widget.cards.length,
+                onPageChanged: (idx) {
+                  _saveChanges(_currentPageIndex);
+                  if (mounted) setState(() => _currentPageIndex = idx);
+                },
+                itemBuilder: (context, index) {
+                  return AnimatedBuilder(
+                    animation: _pageController,
+                    builder: (context, child) {
+                      double page = _pageController.hasClients
+                          ? (_pageController.page ?? index.toDouble())
+                          : index.toDouble();
+                      double angle = (page - index) * (math.pi / 35);
+                      return Transform.rotate(
+                        angle: angle,
+                        child: CardEditor(
+                          key: ValueKey(
+                            'editor_${widget.cards[index].key}_$index',
+                          ),
+                          card: widget.cards[index],
+                          cardIndex: index,
+                          setInfo: widget.setInfo,
+                          driveService: widget.driveService,
+                        ),
+                      );
+                    },
                   );
                 },
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class CardEditor extends StatefulWidget {
-  final Flashcard card;
-  final int cardIndex;
-  final FlashcardSet setInfo;
-  final GoogleDriveService driveService;
-
-  const CardEditor({
-    super.key,
-    required this.card,
-    required this.cardIndex,
-    required this.setInfo,
-    required this.driveService,
-  });
-
-  @override
-  State<CardEditor> createState() => _CardEditorState();
-}
-
-class _CardEditorState extends State<CardEditor> {
-  late TextEditingController _frontController;
-  late TextEditingController _backController;
-
-  @override
-  void initState() {
-    super.initState();
-    _frontController = TextEditingController(text: widget.card.front);
-    _backController = TextEditingController(text: widget.card.back);
-  }
-
-  @override
-  void dispose() {
-    // 텍스트 필드 최종본 반영
-    widget.card.front = _frontController.text;
-    widget.card.back = _backController.text;
-    _frontController.dispose();
-    _backController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color cardBg = widget.card.isFlagged
-        ? (isDark ? const Color(0xFF4D4000) : const Color(0xFFFFF9C4))
-        : (isDark ? AppColors.cDarkSurface : AppColors.cSlate50);
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(10, 5, 10, 10),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
-        ),
-      ),
-      child: Column(
-        children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Center(
-                      child: _buildField(_frontController, isDark, true),
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: Center(
-                      child: _buildField(_backController, isDark, false),
-                    ),
-                  ),
-                ],
               ),
-            ),
-          ),
-          Container(
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.02),
-              border: const Border(
-                top: BorderSide(color: Colors.black12, width: 0.5),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _iconAction(Icons.history_edu_rounded, Colors.grey, () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => RemarkPage(
-                        service: widget.driveService,
-                        spreadsheetId: widget.setInfo.sheetId,
-                        cardIndex: widget.cardIndex,
-                        columnIdx: widget.setInfo.remarkColIdx,
-                        initialRemark: widget.card.remark,
-                      ),
-                    ),
-                  );
-                }),
-                _iconAction(
-                  widget.card.isFlagged ? Icons.flag : Icons.flag_outlined,
-                  widget.card.isFlagged ? Colors.orange : Colors.grey,
-                  () => setState(
-                    () => widget.card.isFlagged = !widget.card.isFlagged,
-                  ),
+
+              // 왼쪽 핸들
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 40,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () {
+                    // 키보드가 닫혀 있을 때만(viewInsets.bottom == 0) 작동
+                    if (MediaQuery.of(context).viewInsets.bottom == 0 &&
+                        _currentPageIndex > 0) {
+                      _pageController.previousPage(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  },
                 ),
-                _iconAction(Icons.ios_share_rounded, Colors.grey, () {}),
-                _iconAction(Icons.more_vert_rounded, Colors.grey, () {}),
-              ],
-            ),
+              ),
+
+              // 오른쪽 핸들
+              Positioned(
+                right: 0,
+                top: 0,
+                bottom: 0,
+                width: 40,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () {
+                    // 키보드가 닫혀 있을 때만(viewInsets.bottom == 0) 작동
+                    if (MediaQuery.of(context).viewInsets.bottom == 0 &&
+                        _currentPageIndex < widget.cards.length - 1) {
+                      _pageController.nextPage(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  },
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildField(
-    TextEditingController controller,
-    bool isDark,
-    bool isFront,
-  ) {
-    return TextField(
-      controller: controller,
-      maxLines: null,
-      onChanged: (val) {
-        if (isFront) {
-          widget.card.front = val;
-        } else {
-          widget.card.back = val;
-        }
-      },
-      style: TextStyle(
-        fontSize: 19,
-        fontWeight: FontWeight.w700,
-        color: isDark ? Colors.white : Colors.black87,
-      ),
-      decoration: const InputDecoration(
-        border: InputBorder.none,
-        isDense: true,
-      ),
-    );
-  }
-
-  Widget _iconAction(IconData icon, Color color, VoidCallback onTap) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Icon(icon, size: 20, color: color),
+        ),
       ),
     );
   }
