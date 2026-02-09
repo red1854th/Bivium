@@ -90,6 +90,9 @@ class _DetailPageState extends State<DetailPage> {
                     : '',
                 front: row[widget.setInfo.frontColIdx],
                 back: row[widget.setInfo.backColIdx],
+                remark: row.length > widget.setInfo.remarkColIdx
+                    ? row[widget.setInfo.remarkColIdx]
+                    : '', // Remark 데이터 로드 추가
               ),
             );
           }
@@ -120,7 +123,6 @@ class _DetailPageState extends State<DetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 테마 모드 판별
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color bgColor = ThemeService.getBackgroundColor(isDark);
     final Color textColor = isDark ? Colors.white : AppColors.cSlate900;
@@ -144,6 +146,11 @@ class _DetailPageState extends State<DetailPage> {
             icon: const Icon(Icons.sync),
             onPressed: _refreshData,
             color: AppColors.cBrand600,
+          ),
+          // 삭제 기능 등 추가 액션이 필요하다면 여기에 배치
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () => widget.onDelete(),
           ),
         ],
       ),

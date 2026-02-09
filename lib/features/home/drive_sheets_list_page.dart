@@ -26,7 +26,6 @@ class DriveSheetsListPage extends StatefulWidget {
 
 class _DriveSheetsListPageState extends State<DriveSheetsListPage> {
   int _currentTabIndex = 0; // 0 = My Drive, 1 = List
-  bool _isGridView = true;
 
   // My Drive 데이터
   List<DriveItem> _folderItems = [];
@@ -70,6 +69,7 @@ class _DriveSheetsListPageState extends State<DriveSheetsListPage> {
     setState(() => _listLoading = true);
     final list = await widget.service.getSpreadsheets();
     if (!mounted) return;
+
     setState(() {
       _listItems = list;
       _listLoading = false;
@@ -90,7 +90,6 @@ class _DriveSheetsListPageState extends State<DriveSheetsListPage> {
     _loadFolder(_currentFolderId);
   }
 
-  /// 공통 시트 선택 로직
   Future<void> _handleSheetSelection(String id, String name) async {
     final set = await Navigator.of(context).push<FlashcardSet>(
       MaterialPageRoute(
@@ -132,15 +131,8 @@ class _DriveSheetsListPageState extends State<DriveSheetsListPage> {
         title: Text(
           _currentTabIndex == 0
               ? (_folderStack.isEmpty ? 'Google Drive' : 'Folder')
-              : 'Spreadsheets',
+              : 'Recent Spreadsheets',
         ),
-        actions: [
-          if (_currentTabIndex == 1 && _listItems.isNotEmpty)
-            IconButton(
-              icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view),
-              onPressed: () => setState(() => _isGridView = !_isGridView),
-            ),
-        ],
       ),
       body: _currentTabIndex == 0
           ? _buildMyDriveBody(isDark)
@@ -184,8 +176,22 @@ class _DriveSheetsListPageState extends State<DriveSheetsListPage> {
             item.isFolder ? Icons.folder : Icons.table_chart,
             color: item.isFolder ? AppColors.cSlate500 : AppColors.cBrand600,
           ),
-          title: Text(item.name),
-          trailing: item.isFolder ? const Icon(Icons.chevron_right) : null,
+          title: Text(
+            item.name,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          subtitle: item.isFolder
+              ? null
+              : Text(
+                  _formatModified(item.modifiedTime),
+                  style: TextStyle(
+                    color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
+                    fontSize: 12,
+                  ),
+                ),
+          trailing: item.isFolder
+              ? const Icon(Icons.chevron_right, size: 20)
+              : null,
           onTap: () => item.isFolder
               ? _openFolder(item)
               : _handleSheetSelection(item.id, item.name),
@@ -198,119 +204,26 @@ class _DriveSheetsListPageState extends State<DriveSheetsListPage> {
     if (_listLoading) return const Center(child: CircularProgressIndicator());
     if (_listItems.isEmpty) return const Center(child: Text('파일이 없습니다.'));
 
-    if (_isGridView) {
-      return GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 0.8,
-        ),
-        itemCount: _listItems.length,
-        itemBuilder: (context, index) => _SheetCard(
-          file: _listItems[index],
-          isDark: isDark,
-          onTap: () => _handleSheetSelection(
-            _listItems[index].id,
-            _listItems[index].name,
-          ),
-        ),
-      );
-    }
-
     return ListView.builder(
       itemCount: _listItems.length,
       itemBuilder: (context, index) {
         final file = _listItems[index];
         return ListTile(
-          title: Text(file.name),
-          subtitle: Text(_formatModified(file.modifiedTime)),
+          leading: const Icon(Icons.table_chart, color: AppColors.cBrand600),
+          title: Text(
+            file.name,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          subtitle: Text(
+            _formatModified(file.modifiedTime),
+            style: TextStyle(
+              color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
+              fontSize: 12,
+            ),
+          ),
           onTap: () => _handleSheetSelection(file.id, file.name),
         );
       },
-    );
-  }
-}
-
-/// 그리드 뷰에서 A1:C3 데이터를 보여주는 카드 위젯
-class _SheetCard extends StatelessWidget {
-  final SheetFile file;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _SheetCard({
-    required this.file,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.cDarkSurface : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 미리보기 영역 (A1:C3 데이터 시뮬레이션)
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.black26 : Colors.grey[100],
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(11),
-                  ),
-                ),
-                child: file.previewData != null && file.previewData!.isNotEmpty
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: file.previewData!
-                            .take(3)
-                            .map(
-                              (text) => Text(
-                                text,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      )
-                    : const Center(
-                        child: Icon(
-                          Icons.table_chart,
-                          size: 30,
-                          color: Colors.grey,
-                        ),
-                      ),
-              ),
-            ),
-            // 하단 파일명 영역
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                file.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

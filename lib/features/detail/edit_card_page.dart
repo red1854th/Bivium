@@ -1,5 +1,6 @@
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/services/google_drive_service.dart';
+import 'package:bivium/features/detail/remark_page.dart';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
@@ -22,93 +23,75 @@ class EditCardPage extends StatefulWidget {
   State<EditCardPage> createState() => _EditCardPageState();
 }
 
-class _EditCardPageState extends State<EditCardPage> with WidgetsBindingObserver {
+class _EditCardPageState extends State<EditCardPage>
+    with WidgetsBindingObserver {
   late PageController _pageController;
   late int _currentPageIndex;
-  final Map<int, Flashcard> _editedCards = {}; // Track changes made to cards
+  final Map<int, Flashcard> _editedCards = {};
 
   @override
   void initState() {
     super.initState();
-
     if (widget.cards.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
+        if (mounted) Navigator.of(context).pop();
       });
       _currentPageIndex = 0;
     } else {
-      _currentPageIndex = widget.initialCardIndex;
-      if (_currentPageIndex < 0 || _currentPageIndex >= widget.cards.length) {
-        _currentPageIndex = math.max(
-          0,
-          math.min(widget.cards.length - 1, _currentPageIndex),
-        );
-      }
-      // Initialize _editedCards with copies of original cards to track changes
+      _currentPageIndex = widget.initialCardIndex.clamp(
+        0,
+        widget.cards.length - 1,
+      );
       for (int i = 0; i < widget.cards.length; i++) {
         _editedCards[i] = Flashcard(
           key: widget.cards[i].key,
           front: widget.cards[i].front,
           back: widget.cards[i].back,
+          remark: widget.cards[i].remark,
           isFlagged: widget.cards[i].isFlagged,
           issues: List.from(widget.cards[i].issues),
         );
       }
     }
-    _pageController = PageController(initialPage: _currentPageIndex);
+    _pageController = PageController(
+      initialPage: _currentPageIndex,
+      viewportFraction: 1.0,
+    );
     WidgetsBinding.instance.addObserver(this);
   }
 
   Future<void> _saveSingleCardChanges(int cardIndex) async {
-    final originalCard = widget.cards[cardIndex];
-    final editedCard = _editedCards[cardIndex];
-
-    if (editedCard != null &&
-        (originalCard.front != editedCard.front ||
-            originalCard.back != editedCard.back)) {
-      final List<Future<void>> saveFutures = [];
-
-      // Save front content
-      saveFutures.add(
+    final original = widget.cards[cardIndex];
+    final edited = _editedCards[cardIndex];
+    if (edited != null &&
+        (original.front != edited.front || original.back != edited.back)) {
+      await Future.wait([
         CardEditor._saveStatic(
           widget.setInfo,
           widget.driveService,
           cardIndex,
           widget.setInfo.frontColIdx,
-          editedCard.front,
+          edited.front,
         ),
-      );
-      // Save back content
-      saveFutures.add(
         CardEditor._saveStatic(
           widget.setInfo,
           widget.driveService,
           cardIndex,
           widget.setInfo.backColIdx,
-          editedCard.back,
+          edited.back,
         ),
-      );
-      await Future.wait(saveFutures);
-
-      // Update the original card in widget.cards to reflect saved changes
-      // This prevents re-saving the same changes if user navigates back and forth or on final dispose
-      originalCard.front = editedCard.front;
-      originalCard.back = editedCard.back;
+      ]);
+      original.front = edited.front;
+      original.back = edited.back;
     }
   }
 
-  // This method will be called when navigating away or app closing
   Future<void> _saveAllChanges() async {
-    final List<Future<void>> allSaveFutures = [];
-
+    final List<Future<void>> futures = [];
     for (int i = 0; i < widget.cards.length; i++) {
-      allSaveFutures.add(
-        _saveSingleCardChanges(i),
-      ); // Use the new single card save logic
+      futures.add(_saveSingleCardChanges(i));
     }
-    await Future.wait(allSaveFutures);
+    await Future.wait(futures);
   }
 
   @override
@@ -121,80 +104,65 @@ class _EditCardPageState extends State<EditCardPage> with WidgetsBindingObserver
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.detached) {
-      _saveAllChanges(); // Fire and forget
-    }
+    if (state == AppLifecycleState.detached) _saveAllChanges();
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.cards.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Edit Cards')),
-        body: const Center(
-          child: Text('Loading cards or no cards to display.'),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color contrastBgColor = isDark
+        ? Colors.grey[200]!
+        : Colors.grey[900]!;
+
     return PopScope(
-      canPop: false, // Prevent default back button behavior
-      onPopInvokedWithResult: (bool didPop, dynamic result) async {
-        // Updated API
-        if (didPop) {
-          return;
-        }
-        // Save all changes when the user attempts to pop the page
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
         await _saveAllChanges();
-        // Pop the current page and return the updated cards to the previous route
-        if (!context.mounted) {
-          return; // Guard against context use across async gap
-        }
-        Navigator.of(context).pop(widget.cards);
+        if (context.mounted) Navigator.of(context).pop(widget.cards);
       },
       child: Scaffold(
-        appBar: AppBar(title: Text('Edit Card #${_currentPageIndex + 1}')),
+        backgroundColor: contrastBgColor,
+        appBar: AppBar(
+          title: Text(
+            'Edit Card #${_currentPageIndex + 1}',
+            style: TextStyle(color: isDark ? Colors.black87 : Colors.white),
+          ),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          iconTheme: IconThemeData(
+            color: isDark ? Colors.black87 : Colors.white,
+          ),
+          centerTitle: true,
+        ),
         body: PageView.builder(
           controller: _pageController,
           itemCount: widget.cards.length,
-          onPageChanged: (newIndex) async {
-            // 1. Dismiss keyboard
+          onPageChanged: (idx) async {
             FocusManager.instance.primaryFocus?.unfocus();
-
-            // 2. Save changes of the *previous* card (if the page actually changed)
-            final previousIndex =
-                _currentPageIndex; // Store old index before updating
-            if (previousIndex != newIndex && widget.cards.isNotEmpty) {
-              await _saveSingleCardChanges(previousIndex);
+            if (_currentPageIndex != idx) {
+              await _saveSingleCardChanges(_currentPageIndex);
             }
-
-            // 3. Update current page index
-            setState(() {
-              _currentPageIndex = newIndex;
-            });
+            setState(() => _currentPageIndex = idx);
           },
           itemBuilder: (context, index) {
-            // Pass the editable card from _editedCards
             final editableCard = _editedCards[index]!;
             return AnimatedBuilder(
               animation: _pageController,
               builder: (context, child) {
-                double value = 1.0;
-                if (_pageController.position.haveDimensions) {
-                  value = (_pageController.page ?? index.toDouble()) - index;
-                  value = (1 - (value.abs() * 0.5)).clamp(0.0, 1.0);
-                }
-
+                double page = _pageController.hasClients
+                    ? (_pageController.page ?? index.toDouble())
+                    : index.toDouble();
+                double angle = (page - index) * (math.pi / 25);
                 return Transform.rotate(
-                  angle:
-                      math.pi *
-                      ((_pageController.page ?? index.toDouble()) - index) /
-                      10,
+                  angle: angle,
                   child: CardEditor(
-                    key: ValueKey(
-                      editableCard.key,
-                    ), // Use a unique key for each card
-                    card: editableCard, // Pass the editable card
+                    key: ValueKey(editableCard.key),
+                    card: editableCard,
                     cardIndex: index,
                     setInfo: widget.setInfo,
                     driveService: widget.driveService,
@@ -204,13 +172,92 @@ class _EditCardPageState extends State<EditCardPage> with WidgetsBindingObserver
             );
           },
         ),
+        bottomNavigationBar: _buildYoutubeStyleBar(isDark),
+      ),
+    );
+  }
+
+  Widget _buildYoutubeStyleBar(bool isDark) {
+    final Color barColor = isDark ? Colors.grey[200]! : Colors.grey[900]!;
+    return Container(
+      decoration: BoxDecoration(
+        color: barColor,
+        border: Border(
+          top: BorderSide(
+            color: Colors.black.withValues(alpha: 0.05),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: SizedBox(
+          height: 56,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _bottomActionItem(
+                Icons.history_edu_rounded,
+                'Remark',
+                isDark,
+                () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => RemarkPage(
+                        service: widget.driveService,
+                        spreadsheetId: widget.setInfo.sheetId,
+                        cardIndex: _currentPageIndex,
+                        columnIdx: widget.setInfo.remarkColIdx,
+                        initialRemark:
+                            _editedCards[_currentPageIndex]?.remark ?? '',
+                      ),
+                    ),
+                  );
+                },
+              ),
+              _bottomActionItem(Icons.flag_outlined, 'Flag', isDark, () {}),
+              _bottomActionItem(
+                Icons.ios_share_rounded,
+                'Share',
+                isDark,
+                () {},
+              ),
+              _bottomActionItem(Icons.more_vert_rounded, 'More', isDark, () {}),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _bottomActionItem(
+    IconData icon,
+    String label,
+    bool isDark,
+    VoidCallback onTap,
+  ) {
+    final Color itemColor = isDark ? Colors.black87 : Colors.white;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 60,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 22, color: itemColor),
+            const SizedBox(height: 4),
+            Text(label, style: TextStyle(fontSize: 10, color: itemColor)),
+          ],
+        ),
       ),
     );
   }
 }
 
 class CardEditor extends StatefulWidget {
-  final Flashcard card; // This card is now directly editable
+  final Flashcard card;
   final int cardIndex;
   final FlashcardSet setInfo;
   final GoogleDriveService driveService;
@@ -226,29 +273,18 @@ class CardEditor extends StatefulWidget {
   @override
   State<CardEditor> createState() => _CardEditorState();
 
-  // Static method to save a single field of a card to Google Sheets
   static Future<void> _saveStatic(
-    FlashcardSet setInfo,
-    GoogleDriveService driveService,
-    int cardIndex,
-    int colIdx,
-    String value,
+    FlashcardSet set,
+    GoogleDriveService svc,
+    int idx,
+    int col,
+    String val,
   ) async {
-    if (setInfo.sheetId.isEmpty) {
-      return; // Cannot show SnackBar from static context without context
-    }
-
-    if (colIdx < 0 || colIdx > 25) {
-      return;
-    }
-
-    final row = cardIndex + 2; // +1 for header, +1 for 1-based index
-    final range = '${String.fromCharCode(65 + colIdx)}$row';
+    if (set.sheetId.isEmpty || col < 0) return;
+    final range = '${String.fromCharCode(65 + col)}${idx + 2}';
     try {
-      await driveService.updateSpreadsheetCell(setInfo.sheetId, range, value);
-    } catch (e) {
-      // Cannot show SnackBar from static context without context
-    }
+      await svc.updateSpreadsheetCell(set.sheetId, range, val);
+    } catch (_) {}
   }
 }
 
@@ -261,15 +297,10 @@ class _CardEditorState extends State<CardEditor> {
     super.initState();
     _frontController = TextEditingController(text: widget.card.front);
     _backController = TextEditingController(text: widget.card.back);
-
-    // No debounced saving here. Changes are saved on exit of EditCardPage.
-    // Update the card object directly for local state
-    _frontController.addListener(() {
-      widget.card.front = _frontController.text;
-    });
-    _backController.addListener(() {
-      widget.card.back = _backController.text;
-    });
+    _frontController.addListener(
+      () => widget.card.front = _frontController.text,
+    );
+    _backController.addListener(() => widget.card.back = _backController.text);
   }
 
   @override
@@ -280,59 +311,79 @@ class _CardEditorState extends State<CardEditor> {
   }
 
   @override
-  void didUpdateWidget(covariant CardEditor oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // If the underlying card object has changed (e.g., after a save and UI rebuild)
-    // update the controllers to reflect the new data.
-    if (widget.card.front != oldWidget.card.front) {
-      _frontController.text = widget.card.front;
-    }
-    if (widget.card.back != oldWidget.card.back) {
-      _backController.text = widget.card.back;
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final effectiveTextStyle = Theme.of(context).textTheme.titleMedium;
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        children: [
-          Stack(
-            alignment: Alignment.centerRight,
-            children: [
-              TextField(
-                controller: _frontController,
-                decoration: const InputDecoration(
-                  labelText: 'Source',
-                  border: OutlineInputBorder(),
-                ),
-                style: effectiveTextStyle,
-                maxLines: null, // Allow unlimited lines
-                keyboardType: TextInputType.multiline,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Stack(
-            alignment: Alignment.centerRight,
-            children: [
-              TextField(
-                controller: _backController,
-                decoration: const InputDecoration(
-                  labelText: 'Target',
-                  border: OutlineInputBorder(),
-                ),
-                style: effectiveTextStyle,
-                maxLines: null, // Allow unlimited lines
-                keyboardType: TextInputType.multiline,
-              ),
-            ],
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 10, 20, 30),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
         ],
-      ), // Close Column
-    ); // Close Padding
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            children: [
+              Expanded(
+                child: Stack(
+                  children: [
+                    _buildLabel('Source'),
+                    Center(child: _buildField(_frontController)),
+                  ],
+                ),
+              ),
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+              ),
+              Expanded(
+                child: Stack(
+                  children: [
+                    _buildLabel('Target'),
+                    Center(child: _buildField(_backController)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLabel(String label) {
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: Theme.of(context).primaryColor.withValues(alpha: 0.6),
+          fontSize: 13,
+          fontWeight: FontWeight.normal,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildField(TextEditingController controller) {
+    return TextField(
+      controller: controller,
+      maxLines: null,
+      textAlign: TextAlign.left,
+      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      decoration: const InputDecoration(
+        border: InputBorder.none,
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(vertical: 10),
+      ),
+    );
   }
 }

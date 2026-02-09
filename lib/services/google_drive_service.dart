@@ -3,8 +3,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:http/http.dart' as http;
+import '../models/flashcard.dart';
 
-/// 오류 해결 1: 드라이브 탐색을 위한 데이터 모델 추가
+/// 드라이브 탐색을 위한 데이터 모델
 class DriveItem {
   final String id;
   final String name;
@@ -21,19 +22,13 @@ class DriveItem {
   });
 }
 
-/// 오류 해결 2: 프리뷰 데이터를 포함하도록 시트 파일 모델 수정
+/// 시트 파일 모델 (previewData 제거)
 class SheetFile {
   final String id;
   final String name;
   final DateTime modifiedTime;
-  final List<String>? previewData; // Grid View 미리보기용
 
-  SheetFile({
-    required this.id,
-    required this.name,
-    required this.modifiedTime,
-    this.previewData,
-  });
+  SheetFile({required this.id, required this.name, required this.modifiedTime});
 }
 
 class GoogleDriveService {
@@ -59,7 +54,7 @@ class GoogleDriveService {
     return GoogleAuthClient(headers);
   }
 
-  /// 오류 해결 3: 폴더 콘텐츠를 가져오는 메서드 추가
+  /// 폴더 콘텐츠 탐색
   Future<List<DriveItem>> getFolderContents(String? folderId) async {
     final client = await _getAuthenticatedClient();
     if (client == null) return [];
@@ -93,7 +88,7 @@ class GoogleDriveService {
     }
   }
 
-  /// 스프레드시트 목록 가져오기
+  /// 스프레드시트 목록 가져오기 (previewData 관련 로직 삭제)
   Future<List<SheetFile>> getSpreadsheets() async {
     final client = await _getAuthenticatedClient();
     if (client == null) return [];
@@ -101,7 +96,7 @@ class GoogleDriveService {
     final driveApi = drive.DriveApi(client);
     try {
       final fileList = await driveApi.files.list(
-        q: "mimeType='application/vnd.google-apps.spreadsheet' and 'me' in owners and trashed=false",
+        q: "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
         pageSize: 100,
         $fields: 'files(id, name, modifiedTime)',
         orderBy: 'modifiedTime desc',
@@ -114,7 +109,6 @@ class GoogleDriveService {
               id: file.id ?? '',
               name: file.name ?? 'Untitled',
               modifiedTime: file.modifiedTime ?? DateTime.now(),
-              previewData: [], // 초기화
             ),
           )
           .toList();
@@ -124,45 +118,78 @@ class GoogleDriveService {
     }
   }
 
-  Future<List<String>> getSpreadsheetHeaders(String spreadsheetId) async {
+  /// 시트 데이터 로드 (비고 매핑 로직 유지 및 강화)
+  Future<List<Flashcard>> getFlashcards(FlashcardSet set) async {
     try {
       final client = await _getAuthenticatedClient();
       if (client == null) return [];
 
       final sheetsApi = sheets.SheetsApi(client);
-
-      // 첫 번째 행(A1부터 Z1까지)의 데이터를 요청합니다.
-      // 필요에 따라 범위를 더 넓힐 수 있습니다.
+      // 데이터 범위 A부터 ZZ까지 넉넉하게 요청
       final response = await sheetsApi.spreadsheets.values.get(
-        spreadsheetId,
-        'A1:Z1',
+        set.sheetId,
+        'A:ZZ',
       );
-
       final values = response.values;
+
       if (values == null || values.isEmpty) return [];
 
-      // 첫 번째 행의 데이터를 문자열 리스트로 변환하여 반환합니다.
-      return values[0].map((cell) => cell.toString()).toList();
+      return values.skip(1).map((row) {
+        // 특정 열 인덱스의 값을 안전하게 추출
+        String getVal(int colIdx) {
+          if (colIdx >= 0 && colIdx < row.length) {
+            return row[colIdx]?.toString() ?? '';
+          }
+          return '';
+        }
+
+        return Flashcard(
+          front: getVal(set.frontColIdx),
+          back: getVal(set.backColIdx),
+          remark: getVal(set.remarkColIdx), // 불러오기 핵심 지점
+          key: set.keyColIdx != -1 ? getVal(set.keyColIdx) : '',
+        );
+      }).toList();
     } catch (e) {
-      debugPrint('헤더 가져오기 실패: $e');
+      debugPrint('카드 데이터 로드 실패: $e');
       return [];
     }
   }
 
-  /// 셀 업데이트 로직 (기존 유지)
+  /// 시트 헤더 가져오기
+  Future<List<String>> getSpreadsheetHeaders(String spreadsheetId) async {
+    try {
+      final client = await _getAuthenticatedClient();
+      if (client == null) return [];
+      final sheetsApi = sheets.SheetsApi(client);
+      final response = await sheetsApi.spreadsheets.values.get(
+        spreadsheetId,
+        'A1:ZZ1',
+      );
+      if (response.values == null || response.values!.isEmpty) return [];
+      return response.values![0].map((cell) => cell.toString()).toList();
+    } catch (e) {
+      debugPrint('헤더 로드 실패: $e');
+      return [];
+    }
+  }
+
+  /// 시트 필드 업데이트
   Future<void> updateFlashcardField({
     required String spreadsheetId,
     required int cardIndex,
     required int columnIdx,
     required String value,
   }) async {
-    if (spreadsheetId.isEmpty) return;
-    final int row = cardIndex + 2;
-    final String columnLetter = String.fromCharCode(65 + columnIdx);
-    final String range = '$columnLetter$row';
+    if (spreadsheetId.isEmpty || columnIdx < 0) return;
+
+    final String columnLetter = _getColName(columnIdx);
+    final String range = '$columnLetter${cardIndex + 2}';
+
     await updateSpreadsheetCell(spreadsheetId, range, value);
   }
 
+  /// 셀 데이터 업데이트 실행
   Future<void> updateSpreadsheetCell(
     String spreadsheetId,
     String range,
@@ -184,8 +211,43 @@ class GoogleDriveService {
         valueInputOption: 'USER_ENTERED',
       );
     } catch (e) {
+      debugPrint('셀 업데이트 에러: $e');
       rethrow;
     }
+  }
+
+  Future<String?> getSpreadsheetCell(String spreadsheetId, String range) async {
+    try {
+      // 클래스 내부에 정의된 _getAuthenticatedClient를 호출합니다.
+      final client = await _getAuthenticatedClient();
+      if (client == null) return null;
+
+      final sheetsApi = sheets.SheetsApi(client);
+      final response = await sheetsApi.spreadsheets.values.get(
+        spreadsheetId,
+        range,
+      );
+
+      if (response.values != null &&
+          response.values!.isNotEmpty &&
+          response.values![0].isNotEmpty) {
+        return response.values![0][0].toString();
+      }
+      return "";
+    } catch (e) {
+      debugPrint('셀 데이터 로드 실패: $e');
+      return null;
+    }
+  }
+
+  /// 인덱스를 시트 문자(A, B... AA...)로 변환
+  String _getColName(int index) {
+    String name = "";
+    while (index >= 0) {
+      name = String.fromCharCode((index % 26) + 65) + name;
+      index = (index ~/ 26) - 1;
+    }
+    return name;
   }
 }
 
