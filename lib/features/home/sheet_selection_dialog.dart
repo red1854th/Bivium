@@ -19,7 +19,6 @@ class SheetSelectionDialog extends StatefulWidget {
     required this.onConfirm,
   });
 
-
   @override
   State<SheetSelectionDialog> createState() => _SheetSelectionDialogState();
 }
@@ -48,9 +47,9 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
 
   Future<void> _loadHeaders() async {
     setState(() => _loadingHeaders = true);
-    
+
     List<String>? headers;
-    
+
     if (widget.service != null) {
       // Use Google Drive API if service is available
       headers = await widget.service!.getSpreadsheetHeaders(widget.sheetId);
@@ -62,7 +61,7 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
             'https://docs.google.com/spreadsheets/d/${widget.sheetId}/export?format=csv',
           ),
         );
-        
+
         if (response.statusCode == 200) {
           final csvData = response.body;
           final lines = csvData.split('\n');
@@ -75,7 +74,7 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
         // Handle error
       }
     }
-    
+
     if (!mounted) return;
 
     int? autoKeyIdx;
@@ -96,7 +95,9 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
       if (autoKeyIdx != null) {
         _keyColIdx = autoKeyIdx;
         _sourceColIdx = autoKeyIdx + 1 < _headers.length ? autoKeyIdx + 1 : 0;
-        _targetColIdx = autoKeyIdx + 2 < _headers.length ? autoKeyIdx + 2 : (_sourceColIdx + 1 < _headers.length ? _sourceColIdx + 1 : 0);
+        _targetColIdx = autoKeyIdx + 2 < _headers.length
+            ? autoKeyIdx + 2
+            : (_sourceColIdx + 1 < _headers.length ? _sourceColIdx + 1 : 0);
       } else {
         _sourceColIdx = 0;
         _targetColIdx = _headers.length > 1 ? 1 : 0;
@@ -117,21 +118,24 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
 
   void _confirm() {
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a title')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please enter a title')));
       return;
     }
-    widget.onConfirm(FlashcardSet(
-      title: _titleController.text.trim(),
-      description: '', // Added description
-      sheetId: widget.sheetId,
-      frontColIdx: _sourceColIdx,
-      backColIdx: _targetColIdx,
-      keyColIdx: _keyColIdx ?? -1,
-      lastSynced: DateTime.now(),
-      lastAccessed: DateTime.now(), // Added lastAccessed
-    ));
+    widget.onConfirm(
+      FlashcardSet(
+        title: _titleController.text.trim(),
+        description: '', // Added description
+        sheetId: widget.sheetId,
+        frontColIdx: _sourceColIdx,
+        backColIdx: _targetColIdx,
+        keyColIdx: _keyColIdx ?? -1,
+        remarkColIdx: _remarkColIdx ?? -1,
+        lastSynced: DateTime.now(),
+        lastAccessed: DateTime.now(), // Added lastAccessed
+      ),
+    );
   }
 
   @override
@@ -281,18 +285,15 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
             ),
             filled: true,
             fillColor: isDark ? AppColors.cDarkSurface : AppColors.cSlate50,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+            ),
           ),
           dropdownColor: isDark ? AppColors.cDarkSurface : Colors.white,
-          style: TextStyle(
-            color: isDark ? Colors.white : AppColors.cSlate900,
-          ),
+          style: TextStyle(color: isDark ? Colors.white : AppColors.cSlate900),
           items: [
-            if (allowNone)
-              DropdownMenuItem(
-                value: -1,
-                child: Text('None'),
-              ),
+            if (allowNone) DropdownMenuItem(value: -1, child: Text('None')),
             ...List.generate(_headers.length, (i) {
               return DropdownMenuItem(
                 value: i,
