@@ -9,12 +9,14 @@ class ItemsTab extends StatefulWidget {
   final FlashcardSet setInfo;
   final GoogleDriveService driveService;
   final ScrollController? scrollController;
+  final Function(List<Flashcard>?) onRefresh;
 
   const ItemsTab({
     super.key,
     required this.cards,
     required this.setInfo,
     required this.driveService,
+    required this.onRefresh,
     this.scrollController,
   });
 
@@ -34,6 +36,7 @@ class _ItemsTabState extends State<ItemsTab> {
   @override
   void didUpdateWidget(covariant ItemsTab oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // 부모로부터 새로운 리스트가 내려오면 로컬 상태 동기화
     if (widget.cards != oldWidget.cards) {
       setState(() => _itemsCards = List<Flashcard>.from(widget.cards));
     }
@@ -50,14 +53,20 @@ class _ItemsTabState extends State<ItemsTab> {
       itemBuilder: (context, index) {
         final card = _itemsCards[index];
         final rowNumber = index + 1;
-
-        // stats용 임시 ID가 아닌, 시트에서 불러온 실제 Key 값 사용
         final String actualKey = card.key.trim().isNotEmpty ? card.key : "N/A";
+
+        final Color flaggedColor = isDark
+            ? const Color(0xFF4D4000)
+            : const Color(0xFFFFF9C4);
+        final Color normalColor = isDark
+            ? AppColors.cDarkSurface
+            : Colors.white;
+        final Color cardBgColor = card.isFlagged ? flaggedColor : normalColor;
 
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 16.0),
           elevation: 0,
-          color: isDark ? AppColors.cDarkSurface : Colors.white,
+          color: cardBgColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
@@ -67,18 +76,27 @@ class _ItemsTabState extends State<ItemsTab> {
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
             onTap: () async {
-              final updatedCards = await Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => EditCardPage(
-                    initialCardIndex: index,
-                    cards: _itemsCards,
-                    setInfo: widget.setInfo,
-                    driveService: widget.driveService,
-                  ),
-                ),
-              );
-              if (updatedCards != null && updatedCards is List<Flashcard>) {
-                setState(() => _itemsCards = updatedCards);
+              // EditCardPage로 이동하며 수정한 리스트를 돌려받음
+              final List<Flashcard>? updatedCards = await Navigator.of(context)
+                  .push<List<Flashcard>>(
+                    MaterialPageRoute(
+                      builder: (context) => EditCardPage(
+                        initialCardIndex: index,
+                        // 참조를 복사하여 전달하여 안전성 확보
+                        cards: List<Flashcard>.from(_itemsCards),
+                        setInfo: widget.setInfo,
+                        driveService: widget.driveService,
+                      ),
+                    ),
+                  );
+
+              // 수정된 데이터가 반환되었을 경우 처리
+              if (updatedCards != null) {
+                setState(() {
+                  _itemsCards = updatedCards;
+                });
+                // DetailPage의 상태를 업데이트하도록 콜백 호출
+                widget.onRefresh(updatedCards);
               }
             },
             child: Padding(
@@ -86,7 +104,6 @@ class _ItemsTabState extends State<ItemsTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 시트 원본 Key 값 표시 영역
                   Row(
                     children: [
                       Text(
@@ -113,13 +130,14 @@ class _ItemsTabState extends State<ItemsTab> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (card.isFlagged)
+                        const Icon(Icons.flag, size: 14, color: Colors.orange),
                     ],
                   ),
                   const SizedBox(height: 10),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Source: 1줄 제한
                       Expanded(
                         child: Text(
                           card.front,
@@ -143,7 +161,6 @@ class _ItemsTabState extends State<ItemsTab> {
                           ),
                         ),
                       ),
-                      // Target: 1줄 제한
                       Expanded(
                         child: Text(
                           card.back,

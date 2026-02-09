@@ -5,7 +5,6 @@ import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:http/http.dart' as http;
 import '../models/flashcard.dart';
 
-/// 드라이브 탐색을 위한 데이터 모델
 class DriveItem {
   final String id;
   final String name;
@@ -22,7 +21,6 @@ class DriveItem {
   });
 }
 
-/// 시트 파일 모델 (previewData 제거)
 class SheetFile {
   final String id;
   final String name;
@@ -54,45 +52,43 @@ class GoogleDriveService {
     return GoogleAuthClient(headers);
   }
 
-  /// 폴더 콘텐츠 탐색
+  /// 폴더 콘텐츠 탐색 복구
   Future<List<DriveItem>> getFolderContents(String? folderId) async {
     final client = await _getAuthenticatedClient();
     if (client == null) return [];
-
     final driveApi = drive.DriveApi(client);
     try {
       final parentId = folderId ?? 'root';
       final query = "'$parentId' in parents and trashed=false";
-
       final fileList = await driveApi.files.list(
         q: query,
         pageSize: 100,
         $fields: 'files(id, name, mimeType, modifiedTime)',
         orderBy: 'folder,name',
       );
-
       if (fileList.files == null) return [];
-      return fileList.files!.map((file) {
-        return DriveItem(
-          id: file.id ?? '',
-          name: file.name ?? 'Untitled',
-          isFolder: file.mimeType == 'application/vnd.google-apps.folder',
-          isSpreadsheet:
-              file.mimeType == 'application/vnd.google-apps.spreadsheet',
-          modifiedTime: file.modifiedTime ?? DateTime.now(),
-        );
-      }).toList();
+      return fileList.files!
+          .map(
+            (file) => DriveItem(
+              id: file.id ?? '',
+              name: file.name ?? 'Untitled',
+              isFolder: file.mimeType == 'application/vnd.google-apps.folder',
+              isSpreadsheet:
+                  file.mimeType == 'application/vnd.google-apps.spreadsheet',
+              modifiedTime: file.modifiedTime ?? DateTime.now(),
+            ),
+          )
+          .toList();
     } catch (e) {
       debugPrint('폴더 탐색 실패: $e');
       return [];
     }
   }
 
-  /// 스프레드시트 목록 가져오기 (previewData 관련 로직 삭제)
+  /// 스프레드시트 목록 가져오기 복구
   Future<List<SheetFile>> getSpreadsheets() async {
     final client = await _getAuthenticatedClient();
     if (client == null) return [];
-
     final driveApi = drive.DriveApi(client);
     try {
       final fileList = await driveApi.files.list(
@@ -101,7 +97,6 @@ class GoogleDriveService {
         $fields: 'files(id, name, modifiedTime)',
         orderBy: 'modifiedTime desc',
       );
-
       if (fileList.files == null) return [];
       return fileList.files!
           .map(
@@ -118,50 +113,66 @@ class GoogleDriveService {
     }
   }
 
-  /// 시트 데이터 로드 (비고 매핑 로직 유지 및 강화)
+  /// 시트 데이터 로드 (GID 할당 포함)
   Future<List<Flashcard>> getFlashcards(FlashcardSet set) async {
+    final client = await _getAuthenticatedClient();
+    if (client == null) return [];
+    final sheetsApi = sheets.SheetsApi(client);
     try {
-      final client = await _getAuthenticatedClient();
-      if (client == null) return [];
-
-      final sheetsApi = sheets.SheetsApi(client);
-      // 데이터 범위 A부터 ZZ까지 넉넉하게 요청
-      final response = await sheetsApi.spreadsheets.values.get(
+      final spreadsheet = await sheetsApi.spreadsheets.get(
         set.sheetId,
-        'A:ZZ',
+        includeGridData: true,
       );
-      final values = response.values;
+      final firstSheet = spreadsheet.sheets![0];
 
-      if (values == null || values.isEmpty) return [];
+      // GID 할당
+      set.gid = firstSheet.properties?.sheetId ?? 0;
 
-      return values.skip(1).map((row) {
-        // 특정 열 인덱스의 값을 안전하게 추출
-        String getVal(int colIdx) {
-          if (colIdx >= 0 && colIdx < row.length) {
-            return row[colIdx]?.toString() ?? '';
+      final List<Flashcard> cards = [];
+      final rowData = firstSheet.data?[0].rowData;
+      if (rowData == null) return [];
+
+      for (int i = 1; i < rowData.length; i++) {
+        final rowValues = rowData[i].values;
+        if (rowValues == null) continue;
+
+        bool flagged = false;
+        if (set.frontColIdx < rowValues.length) {
+          final rgb = rowValues[set.frontColIdx]
+              .effectiveFormat
+              ?.backgroundColorStyle
+              ?.rgbColor;
+          if (rgb != null) {
+            flagged =
+                (rgb.red ?? 0) > 0.8 &&
+                (rgb.green ?? 0) > 0.8 &&
+                (rgb.blue ?? 0) < 0.6;
           }
-          return '';
         }
-
-        return Flashcard(
-          front: getVal(set.frontColIdx),
-          back: getVal(set.backColIdx),
-          remark: getVal(set.remarkColIdx), // 불러오기 핵심 지점
-          key: set.keyColIdx != -1 ? getVal(set.keyColIdx) : '',
-        );
-      }).toList();
+        final rawRow = rowValues
+            .map(
+              (v) =>
+                  v.effectiveValue?.stringValue ??
+                  v.effectiveValue?.numberValue?.toString(),
+            )
+            .toList();
+        final card = Flashcard.fromRow(rawRow, set);
+        card.isFlagged = flagged;
+        cards.add(card);
+      }
+      return cards;
     } catch (e) {
-      debugPrint('카드 데이터 로드 실패: $e');
+      debugPrint('데이터 로드 실패: $e');
       return [];
     }
   }
 
-  /// 시트 헤더 가져오기
+  /// 헤더 가져오기 복구
   Future<List<String>> getSpreadsheetHeaders(String spreadsheetId) async {
+    final client = await _getAuthenticatedClient();
+    if (client == null) return [];
+    final sheetsApi = sheets.SheetsApi(client);
     try {
-      final client = await _getAuthenticatedClient();
-      if (client == null) return [];
-      final sheetsApi = sheets.SheetsApi(client);
       final response = await sheetsApi.spreadsheets.values.get(
         spreadsheetId,
         'A1:ZZ1',
@@ -174,80 +185,101 @@ class GoogleDriveService {
     }
   }
 
-  /// 시트 필드 업데이트
-  Future<void> updateFlashcardField({
-    required String spreadsheetId,
-    required int cardIndex,
-    required int columnIdx,
-    required String value,
-  }) async {
-    if (spreadsheetId.isEmpty || columnIdx < 0) return;
-
-    final String columnLetter = _getColName(columnIdx);
-    final String range = '$columnLetter${cardIndex + 2}';
-
-    await updateSpreadsheetCell(spreadsheetId, range, value);
-  }
-
-  /// 셀 데이터 업데이트 실행
+  /// 특정 셀 업데이트
   Future<void> updateSpreadsheetCell(
     String spreadsheetId,
     String range,
     String value,
   ) async {
-    try {
-      final client = await _getAuthenticatedClient();
-      if (client == null) return;
-      final sheetsApi = sheets.SheetsApi(client);
-      final valueRange = sheets.ValueRange.fromJson({
-        'values': [
-          [value],
+    final client = await _getAuthenticatedClient();
+    if (client == null) return;
+    final sheetsApi = sheets.SheetsApi(client);
+    final valueRange = sheets.ValueRange.fromJson({
+      'values': [
+        [value],
+      ],
+    });
+    await sheetsApi.spreadsheets.values.update(
+      valueRange,
+      spreadsheetId,
+      range,
+      valueInputOption: 'USER_ENTERED',
+    );
+  }
+
+  /// 카드 업데이트
+  Future<void> updateFlashcard({
+    required String spreadsheetId,
+    required int cardIndex,
+    required FlashcardSet setInfo,
+    required Flashcard card,
+  }) async {
+    final client = await _getAuthenticatedClient();
+    if (client == null) return;
+    final sheetsApi = sheets.SheetsApi(client);
+
+    final color = card.isFlagged
+        ? sheets.Color(red: 1.0, green: 0.98, blue: 0.77)
+        : sheets.Color(red: 1.0, green: 1.0, blue: 1.0);
+
+    final batchRequest = sheets.BatchUpdateSpreadsheetRequest(
+      requests: [
+        _buildCellReq(
+          setInfo.gid,
+          cardIndex,
+          setInfo.frontColIdx,
+          card.front,
+          color,
+        ),
+        _buildCellReq(
+          setInfo.gid,
+          cardIndex,
+          setInfo.backColIdx,
+          card.back,
+          null,
+        ),
+      ],
+    );
+    await sheetsApi.spreadsheets.batchUpdate(batchRequest, spreadsheetId);
+  }
+
+  sheets.Request _buildCellReq(
+    int gid,
+    int row,
+    int col,
+    String val,
+    sheets.Color? color,
+  ) {
+    return sheets.Request(
+      updateCells: sheets.UpdateCellsRequest(
+        range: sheets.GridRange(
+          sheetId: gid,
+          startRowIndex: row + 1,
+          endRowIndex: row + 2,
+          startColumnIndex: col,
+          endColumnIndex: col + 1,
+        ),
+        rows: [
+          sheets.RowData(
+            values: [
+              sheets.CellData(
+                userEnteredValue: sheets.ExtendedValue(stringValue: val),
+                userEnteredFormat: color != null
+                    ? sheets.CellFormat(
+                        backgroundColorStyle: sheets.ColorStyle(
+                          rgbColor: color,
+                        ),
+                      )
+                    : null,
+              ),
+            ],
+          ),
         ],
-      });
-      await sheetsApi.spreadsheets.values.update(
-        valueRange,
-        spreadsheetId,
-        range,
-        valueInputOption: 'USER_ENTERED',
-      );
-    } catch (e) {
-      debugPrint('셀 업데이트 에러: $e');
-      rethrow;
-    }
-  }
-
-  Future<String?> getSpreadsheetCell(String spreadsheetId, String range) async {
-    try {
-      // 클래스 내부에 정의된 _getAuthenticatedClient를 호출합니다.
-      final client = await _getAuthenticatedClient();
-      if (client == null) return null;
-
-      final sheetsApi = sheets.SheetsApi(client);
-      final response = await sheetsApi.spreadsheets.values.get(
-        spreadsheetId,
-        range,
-      );
-
-      if (response.values != null &&
-          response.values!.isNotEmpty &&
-          response.values![0].isNotEmpty) {
-        return response.values![0][0].toString();
-      }
-      return "";
-    } catch (e) {
-      debugPrint('셀 데이터 로드 실패: $e');
-      return null;
-    }
-  }
-
-  /// 인덱스를 시트 문자(A, B... AA...)로 변환
-  String _getColName(int index) {
-    String name = "";
-    while (index >= 0) {
-      name = String.fromCharCode((index % 26) + 65) + name;
-      index = (index ~/ 26) - 1;
-    }
-    return name;
+        fields: color != null
+            ? 'userEnteredValue,userEnteredFormat.backgroundColorStyle'
+            : 'userEnteredValue',
+      ),
+    );
   }
 }
 
