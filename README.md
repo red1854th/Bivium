@@ -19,7 +19,7 @@ A Flutter-based LQA & Translation tool that streamlines translation audits with 
 * **Development**: 100% AI-assisted (Purely Vibe-Coded)
 
 ## 🔍 Description
-A professional Flutter tool designed to streamline the Translate and LQA (Language Quality Assurance) process using Google Sheets as a real-time backend.
+A professional Flutter tool designed to streamline the Translation and LQA (Language Quality Assurance) process using Google Sheets as a real-time backend.
 
 Key Features
 
@@ -36,7 +36,7 @@ Google Sheets를 데이터베이스로 활용하여 번역 작업 및 LQA 과정
 
 - 실시간 검수 및 동기화: 구글 시트에 기재된 번역문을 앱에서 즉시 검수하고, 수정 사항을 실시간으로 시트에 반영합니다.
 
-- 시각적 상태 관리: 시트의 'Light Yellow 3' 배경색을 감지하여, 수정이 필요한 항목(Flagged)을 자동으로 식별하고 시각화합니다.
+- 시각적 상태 관리: 시트의 'Light Yellow 3' 배경색을 감지하여, 수정이 필요한 항목을 자동으로 식별하고 시각화합니다.
 
 - LQA 특화 에디터: 번역문 비교 및 수정에 최적화된 인터페이스를 제공하며, Remark 기능을 통해 검수 의견을 즉시 기록할 수 있습니다.
 

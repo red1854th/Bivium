@@ -89,6 +89,9 @@ class _EditCardPageState extends State<EditCardPage> {
             child: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: _handlePop,
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              hoverColor: Colors.transparent,
             ),
           ),
           title: Text(

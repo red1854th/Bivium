@@ -15,7 +15,7 @@ class Flashcard {
     List<String>? issues,
   }) : issues = issues ?? [];
 
-  /// 구글 시트의 한 줄(Row)을 Flashcard 객체로 변환하는 메서드
+  /// 구글 시트의 한 줄(Row)을 Flashcard 객체로 변환
   factory Flashcard.fromRow(List<Object?> row, FlashcardSet set) {
     String getVal(int colIdx) {
       if (colIdx >= 0 && colIdx < row.length) {
@@ -34,10 +34,11 @@ class Flashcard {
 }
 
 class FlashcardSet {
+  final String id; // [추가] 고유 식별자 (중복 삭제 방지용)
   String title;
   String description;
   String sheetId; // 스프레드시트 파일 ID
-  int gid; // [수정] 특정 탭(시트)의 고유 ID (400 에러 방지용)
+  int gid; // 특정 탭(시트)의 고유 ID
   int frontColIdx;
   int backColIdx;
   int keyColIdx;
@@ -47,10 +48,11 @@ class FlashcardSet {
   Map<String, dynamic> qcResults;
 
   FlashcardSet({
+    required this.id, // 필수 인자로 변경
     required this.title,
     this.description = '',
     required this.sheetId,
-    this.gid = 0, // [추가] 기본값 0
+    this.gid = 0,
     required this.frontColIdx,
     required this.backColIdx,
     this.keyColIdx = -1,
@@ -61,10 +63,11 @@ class FlashcardSet {
   }) : qcResults = qcResults ?? {};
 
   Map<String, dynamic> toJson() => {
+    'id': id, // [추가] 고유 ID 저장
     'title': title,
     'description': description,
     'sheetId': sheetId,
-    'gid': gid, // [추가] JSON 저장
+    'gid': gid,
     'frontColIdx': frontColIdx,
     'backColIdx': backColIdx,
     'keyColIdx': keyColIdx,
@@ -75,10 +78,12 @@ class FlashcardSet {
   };
 
   factory FlashcardSet.fromJson(Map<String, dynamic> json) => FlashcardSet(
+    // [수정] 기존 데이터에 ID가 없을 경우를 대비해 생성 시간 기반 ID 부여
+    id: json['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
     title: json['title'],
     description: json['description'] ?? '',
     sheetId: json['sheetId'],
-    gid: json['gid'] ?? 0, // [추가] JSON 파싱
+    gid: json['gid'] ?? 0,
     frontColIdx: json['frontColIdx'],
     backColIdx: json['backColIdx'],
     keyColIdx: json['keyColIdx'] ?? -1,
@@ -90,8 +95,8 @@ class FlashcardSet {
         : {},
   );
 
-  /// 특정 필드만 변경하여 새로운 객체를 생성하는 메서드
   FlashcardSet copyWith({
+    String? id,
     String? title,
     String? description,
     String? sheetId,
@@ -105,6 +110,7 @@ class FlashcardSet {
     Map<String, dynamic>? qcResults,
   }) {
     return FlashcardSet(
+      id: id ?? this.id,
       title: title ?? this.title,
       description: description ?? this.description,
       sheetId: sheetId ?? this.sheetId,

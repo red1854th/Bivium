@@ -5,6 +5,7 @@ import '../../models/flashcard.dart';
 import 'tabs/items_tab.dart';
 import 'tabs/statistics_tab.dart';
 import 'tabs/glossary_tab.dart';
+import 'package:bivium/features/home/edit_project_page.dart';
 
 class DetailPage extends StatefulWidget {
   final FlashcardSet setInfo;
@@ -29,6 +30,7 @@ class DetailPage extends StatefulWidget {
 class _DetailPageState extends State<DetailPage> {
   List<Flashcard> cards = [];
   bool isLoading = true;
+  bool isExpanded = false;
   int _currentIndex = 0;
 
   final PageController _pageController = PageController();
@@ -47,7 +49,6 @@ class _DetailPageState extends State<DetailPage> {
     super.dispose();
   }
 
-  /// 초기 데이터 로드 (네트워크 호출)
   Future<void> _fetchInitialData() async {
     if (!mounted) return;
     setState(() => isLoading = true);
@@ -69,11 +70,9 @@ class _DetailPageState extends State<DetailPage> {
     }
   }
 
-  /// 로컬 상태 업데이트 (수정 페이지에서 돌아올 때 호출됨)
   void _updateLocalCards(List<Flashcard>? updatedList) {
     if (updatedList != null && mounted) {
       setState(() {
-        // 깊은 복사를 통해 참조를 끊고 새 리스트 할당
         cards = List<Flashcard>.from(updatedList);
       });
     }
@@ -106,22 +105,105 @@ class _DetailPageState extends State<DetailPage> {
     }
   }
 
+  void _showFullDescription(
+    BuildContext context,
+    Color textColor,
+    Color bgColor,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: bgColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'DESCRIPTION',
+                  style: TextStyle(
+                    color: AppColors.cBrand600,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.4,
+                  ),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      widget.setInfo.description,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 14,
+                        height: 1.6,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      '닫기',
+                      style: TextStyle(color: AppColors.cBrand600),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color bgColor = isDark ? AppColors.cDarkBg : AppColors.cBg;
     final Color textColor = isDark ? Colors.white : AppColors.cSlate900;
+    final Color subTextColor = isDark ? Colors.white70 : AppColors.cSlate600;
 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
         centerTitle: true,
-        title: Text(
-          widget.setInfo.title,
-          style: TextStyle(
-            color: textColor,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+        title: GestureDetector(
+          onTap: () => setState(() => isExpanded = !isExpanded),
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  widget.setInfo.title,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+              const SizedBox(width: 6),
+              AnimatedRotation(
+                duration: const Duration(milliseconds: 250),
+                turns: isExpanded ? 0.5 : 0,
+                child: Icon(Icons.expand_more, size: 24, color: textColor),
+              ),
+            ],
           ),
         ),
         backgroundColor: bgColor,
@@ -133,36 +215,140 @@ class _DetailPageState extends State<DetailPage> {
             onPressed: _fetchInitialData,
             color: AppColors.cBrand600,
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () => widget.onDelete(),
+        ],
+      ),
+      body: Column(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            height: isExpanded ? 130 : 0,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.03)
+                  : Colors.black.withValues(alpha: 0.02),
+              border: Border(
+                bottom: BorderSide(
+                  color: isExpanded
+                      ? (isDark ? Colors.white10 : Colors.black12)
+                      : Colors.transparent,
+                ),
+              ),
+            ),
+            child: SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          if (widget.setInfo.description.isNotEmpty) {
+                            _showFullDescription(context, textColor, bgColor);
+                          }
+                        },
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'DESCRIPTION',
+                              style: TextStyle(
+                                color: AppColors.cBrand600,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              widget.setInfo.description.isEmpty
+                                  ? '등록된 프로젝트 설명이 없습니다.'
+                                  : widget.setInfo.description,
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w400,
+                                height: 1.5,
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Transform.translate(
+                      offset: const Offset(24, -19),
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.settings_outlined,
+                          size: 20,
+                          color: subTextColor.withValues(alpha: 0.6),
+                        ),
+                        onPressed: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => EditProjectPage(
+                                set: widget.setInfo,
+                                allTitles: widget.allTitles,
+                                onUpdate: (newTitle, newDescription) {
+                                  setState(() {
+                                    widget.setInfo.title = newTitle;
+                                    widget.setInfo.description = newDescription;
+                                  });
+                                  // 부모(Home)의 SharedPreferences 저장 로직 실행
+                                  widget.onUpdate();
+                                },
+                                onDelete: widget.onDelete,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.cBrand600,
+                    ),
+                  )
+                : PageView(
+                    controller: _pageController,
+                    onPageChanged: (index) =>
+                        setState(() => _currentIndex = index),
+                    children: [
+                      ItemsTab(
+                        cards: cards,
+                        setInfo: widget.setInfo,
+                        driveService: widget.driveService,
+                        scrollController: _itemsScrollController,
+                        onRefresh: (updatedList) =>
+                            _updateLocalCards(updatedList),
+                      ),
+                      StatisticsTab(
+                        cards: cards,
+                        setInfo: widget.setInfo,
+                        onCardTap: _navigateToCard,
+                      ),
+                      GlossaryTab(cards: cards),
+                    ],
+                  ),
           ),
         ],
       ),
-      body: isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.cBrand600),
-            )
-          : PageView(
-              controller: _pageController,
-              onPageChanged: (index) => setState(() => _currentIndex = index),
-              children: [
-                ItemsTab(
-                  cards: cards,
-                  setInfo: widget.setInfo,
-                  driveService: widget.driveService,
-                  scrollController: _itemsScrollController,
-                  // [중요] 수정 완료 후 리스트를 전달받아 UI를 갱신함
-                  onRefresh: (updatedList) => _updateLocalCards(updatedList),
-                ),
-                StatisticsTab(
-                  cards: cards,
-                  setInfo: widget.setInfo,
-                  onCardTap: _navigateToCard,
-                ),
-                GlossaryTab(cards: cards),
-              ],
-            ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onTabTapped,
@@ -171,9 +357,18 @@ class _DetailPageState extends State<DetailPage> {
         unselectedItemColor: isDark ? Colors.white38 : Colors.black38,
         type: BottomNavigationBarType.fixed,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Items'),
-          BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Stats'),
-          BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Glossary'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.list_alt_rounded),
+            label: 'Items',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.analytics_outlined),
+            label: 'Stats',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.auto_stories_outlined),
+            label: 'Glossary',
+          ),
         ],
       ),
     );

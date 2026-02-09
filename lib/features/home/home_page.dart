@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart'; // Import for compute
+import 'package:flutter/foundation.dart';
 import '../../core/theme.dart';
 import '../../models/flashcard.dart';
 import '../../services/google_drive_service.dart';
@@ -11,7 +13,6 @@ import 'setting_page.dart';
 import 'package:bivium/features/detail/detail_page.dart';
 import 'package:bivium/features/home/edit_project_page.dart';
 
-// Top-level function to parse JSON in an isolate
 List<FlashcardSet> _parseFlashcardSets(String setsJson) {
   final List<dynamic> decoded = jsonDecode(setsJson);
   return decoded.map((item) => FlashcardSet.fromJson(item)).toList();
@@ -19,13 +20,9 @@ List<FlashcardSet> _parseFlashcardSets(String setsJson) {
 
 class HomePage extends StatefulWidget {
   final VoidCallback? onThemeChanged;
-  final SharedPreferences prefs; // Add this field
+  final SharedPreferences prefs;
 
-  const HomePage({
-    super.key,
-    this.onThemeChanged,
-    required this.prefs,
-  }); // Modify constructor
+  const HomePage({super.key, this.onThemeChanged, required this.prefs});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -33,23 +30,122 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   List<FlashcardSet> _sets = [];
-
-  bool _isLoading = true; // Add this new state variable
+  bool _isLoading = true;
   late final GoogleDriveService _driveService;
-  late final SharedPreferences _prefs; // Add this field
+  late final SharedPreferences _prefs;
+  int? _lastViewedIndex;
 
   @override
   void initState() {
     super.initState();
     _driveService = GoogleDriveService();
-    _prefs = widget.prefs; // Initialize prefs from widget
-    // Defer _loadData() until after the first frame
+    _prefs = widget.prefs;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
     });
   }
 
-  // 중복된 제목을 방지하기 위한 메서드 정의
+  Future<void> _showEasterEgg() async {
+    try {
+      final String response = await rootBundle.loadString(
+        'assets/data/quotes.json',
+      );
+      final List<dynamic> data = jsonDecode(response);
+
+      // 무작위 인덱스를 뽑되, 바로 직전에 본 인덱스는 제외하는 함수
+      Map<String, dynamic> getRandomQuote() {
+        if (data.length <= 1) return data[0]; // 데이터가 1개뿐이면 예외 처리
+
+        int nextIndex;
+        do {
+          nextIndex = Random().nextInt(data.length);
+        } while (nextIndex == _lastViewedIndex); // 직전 인덱스와 같으면 다시 뽑기
+
+        _lastViewedIndex = nextIndex; // 현재 뽑은 인덱스를 기록
+        return data[nextIndex];
+      }
+
+      if (!mounted) return;
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+
+      showDialog(
+        context: context,
+        builder: (context) {
+          var currentData = getRandomQuote();
+
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return Dialog(
+                backgroundColor: isDark ? AppColors.cDarkSurface : Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          setDialogState(() {
+                            currentData = getRandomQuote();
+                          });
+                        },
+                        child: Image.asset(
+                          'assets/icon/app_logo.png',
+                          width: 32,
+                          height: 32,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 4.0,
+                        runSpacing: 4.0,
+                        children: currentData['quote']
+                            .toString()
+                            .split(' ')
+                            .map((word) {
+                              return Text(
+                                word,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppColors.cSlate900,
+                                  letterSpacing: -0.2,
+                                ),
+                              );
+                            })
+                            .toList(),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "- ${currentData['author']}",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          color: isDark
+                              ? AppColors.cSlate400
+                              : AppColors.cSlate500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint("인용구 로드 실패: $e");
+    }
+  }
+
   String uniquifyTitle(String title, List<String> existingTitles) {
     if (!existingTitles.contains(title)) return title;
     int counter = 1;
@@ -62,30 +158,23 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadData() async {
-    // Use the passed prefs instance
     final String? setsJson = _prefs.getString('flashcard_sets');
     if (setsJson != null) {
-      // Use compute to parse JSON on a separate isolate
       final List<FlashcardSet> loadedSets = await compute(
         _parseFlashcardSets,
         setsJson,
       );
-      loadedSets.sort(
-        (a, b) => b.lastAccessed.compareTo(a.lastAccessed),
-      ); // Sort by lastAccessed
+      loadedSets.sort((a, b) => b.lastAccessed.compareTo(a.lastAccessed));
       setState(() {
         _sets = loadedSets;
-        _isLoading = false; // Set to false after data is loaded
+        _isLoading = false;
       });
     } else {
-      setState(() {
-        _isLoading = false; // Also set to false if no data was found
-      });
+      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _saveData() async {
-    // Use the passed prefs instance
     final String encoded = jsonEncode(_sets.map((s) => s.toJson()).toList());
     await _prefs.setString('flashcard_sets', encoded);
     await _prefs.reload();
@@ -100,26 +189,34 @@ class _HomePageState extends State<HomePage> {
       body: SafeArea(
         child: Column(
           children: [
-            // 1. Header Bar
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
                 children: [
-                  Image.asset(
-                    'assets/icon/app_logo.png',
-                    width: 28,
-                    height: 28,
-                    fit: BoxFit.contain,
-                    filterQuality: FilterQuality.high,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    "BIVIUM",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 20,
-                      color: isDark ? Colors.white : AppColors.cSlate900,
-                      letterSpacing: -0.5,
+                  GestureDetector(
+                    onTap: _showEasterEgg,
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset(
+                          'assets/icon/app_logo.png',
+                          width: 28,
+                          height: 28,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          "BIVIUM",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 20,
+                            color: isDark ? Colors.white : AppColors.cSlate900,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const Spacer(),
@@ -128,9 +225,7 @@ class _HomePageState extends State<HomePage> {
                       Icons.search,
                       color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
                     ),
-                    onPressed: () {
-                      // 검색 기능 구현 예정
-                    },
+                    onPressed: () {},
                   ),
                   IconButton(
                     icon: Icon(
@@ -144,8 +239,7 @@ class _HomePageState extends State<HomePage> {
                           builder: (_) => SettingPage(
                             service: _driveService,
                             onThemeChanged: widget.onThemeChanged,
-                            prefs:
-                                _prefs, // Pass the SharedPreferences instance
+                            prefs: _prefs,
                           ),
                         ),
                       );
@@ -154,8 +248,6 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-
-            // 2. Project Control Bar
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
@@ -170,7 +262,6 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   const Spacer(),
-
                   IconButton(
                     onPressed: () => _showAddDialog(context),
                     icon: const Icon(Icons.add, color: Colors.white),
@@ -182,16 +273,10 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-
-            // 3. Content List/Grid
             Expanded(
-              child:
-                  _isLoading // Check _isLoading first
-                  ? const Center(
-                      child: CircularProgressIndicator(),
-                    ) // Show loading indicator
-                  : _sets
-                        .isEmpty // Only show "No projects yet" if not loading AND no sets
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _sets.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -204,7 +289,7 @@ class _HomePageState extends State<HomePage> {
                                 : AppColors.cSlate300,
                           ),
                           const SizedBox(height: 16),
-                          Text(
+                          const Text(
                             "No projects yet",
                             style: TextStyle(
                               color: AppColors.cSlate400,
@@ -273,6 +358,8 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         Text(
                           s.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 16,
@@ -292,9 +379,11 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
-                  // Kebab menu button to navigate to EditProjectPage
                   IconButton(
-                    icon: const Icon(Icons.more_vert, color: AppColors.cSlate400),
+                    icon: const Icon(
+                      Icons.more_vert,
+                      color: AppColors.cSlate400,
+                    ),
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -311,7 +400,7 @@ class _HomePageState extends State<HomePage> {
                             },
                             onDelete: () {
                               setState(() {
-                                _sets.removeWhere((set) => set.sheetId == s.sheetId);
+                                _sets.removeWhere((item) => item.id == s.id);
                               });
                               _saveData();
                             },
@@ -330,14 +419,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _navigateToDetail(FlashcardSet s, int index) async {
-    // Update lastAccessed before navigating
-    setState(() {
-      _sets[index].lastAccessed = DateTime.now();
-    });
-    await _saveData(); // Save the updated access time
-
+    setState(() => _sets[index].lastAccessed = DateTime.now());
+    await _saveData();
     if (!mounted) return;
-
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -346,24 +430,22 @@ class _HomePageState extends State<HomePage> {
           allTitles: _sets.map((e) => e.title).toList(),
           onUpdate: () => _saveData(),
           onDelete: () {
-            setState(() => _sets.removeAt(index));
+            setState(() {
+              _sets.removeWhere((item) => item.id == s.id);
+            });
             _saveData();
           },
           driveService: _driveService,
         ),
       ),
     );
-    // Refresh the state when returning from the detail page
-    // This will trigger a re-sort if _loadData is called again or if _sets is directly sorted
     setState(() {
-      _sets.sort(
-        (a, b) => b.lastAccessed.compareTo(a.lastAccessed),
-      ); // Sort after returning
+      _sets.sort((a, b) => b.lastAccessed.compareTo(a.lastAccessed));
     });
   }
 
   void _showAddDialog(BuildContext context) {
-    final titles = _sets.map((s) => s.title).toList(); // 변수 미리 선언
+    final titles = _sets.map((s) => s.title).toList();
     showDialog(
       context: context,
       builder: (_) => AddSetDialog(

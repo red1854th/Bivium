@@ -125,15 +125,16 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
     }
     widget.onConfirm(
       FlashcardSet(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: _titleController.text.trim(),
-        description: '', // Added description
+        description: '',
         sheetId: widget.sheetId,
         frontColIdx: _sourceColIdx,
         backColIdx: _targetColIdx,
         keyColIdx: _keyColIdx ?? -1,
         remarkColIdx: _remarkColIdx ?? -1,
         lastSynced: DateTime.now(),
-        lastAccessed: DateTime.now(), // Added lastAccessed
+        lastAccessed: DateTime.now(),
       ),
     );
   }
