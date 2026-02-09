@@ -1,7 +1,9 @@
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/services/google_drive_service.dart';
 import 'package:bivium/features/detail/remark_page.dart';
+import 'package:bivium/core/theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'dart:async';
 
@@ -114,9 +116,7 @@ class _EditCardPageState extends State<EditCardPage>
     }
 
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color contrastBgColor = isDark
-        ? Colors.grey[200]!
-        : Colors.grey[900]!;
+    final Color bgColor = isDark ? AppColors.cDarkBg : AppColors.cBg;
 
     return PopScope(
       canPop: false,
@@ -126,130 +126,78 @@ class _EditCardPageState extends State<EditCardPage>
         if (context.mounted) Navigator.of(context).pop(widget.cards);
       },
       child: Scaffold(
-        backgroundColor: contrastBgColor,
+        backgroundColor: bgColor,
         appBar: AppBar(
+          toolbarHeight: 30,
+          leadingWidth: 48,
+          systemOverlayStyle: SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: isDark
+                ? Brightness.light
+                : Brightness.dark,
+            statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+          ),
+          leading: Transform.translate(
+            offset: const Offset(4, -6),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              iconSize: 25,
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              onPressed: () {
+                _saveAllChanges();
+                Navigator.of(context).pop(widget.cards);
+              },
+            ),
+          ),
           title: Text(
-            'Edit Card #${_currentPageIndex + 1}',
-            style: TextStyle(color: isDark ? Colors.black87 : Colors.white),
+            '${_currentPageIndex + 1}/${widget.cards.length}',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: isDark ? AppColors.cSlate200 : AppColors.cSlate800,
+            ),
           ),
           elevation: 0,
           backgroundColor: Colors.transparent,
-          iconTheme: IconThemeData(
-            color: isDark ? Colors.black87 : Colors.white,
-          ),
           centerTitle: true,
         ),
-        body: PageView.builder(
-          controller: _pageController,
-          itemCount: widget.cards.length,
-          onPageChanged: (idx) async {
-            FocusManager.instance.primaryFocus?.unfocus();
-            if (_currentPageIndex != idx) {
-              await _saveSingleCardChanges(_currentPageIndex);
-            }
-            setState(() => _currentPageIndex = idx);
-          },
-          itemBuilder: (context, index) {
-            final editableCard = _editedCards[index]!;
-            return AnimatedBuilder(
-              animation: _pageController,
-              builder: (context, child) {
-                double page = _pageController.hasClients
-                    ? (_pageController.page ?? index.toDouble())
-                    : index.toDouble();
-                double angle = (page - index) * (math.pi / 25);
-                return Transform.rotate(
-                  angle: angle,
-                  child: CardEditor(
-                    key: ValueKey(editableCard.key),
-                    card: editableCard,
-                    cardIndex: index,
-                    setInfo: widget.setInfo,
-                    driveService: widget.driveService,
-                  ),
-                );
-              },
-            );
-          },
-        ),
-        bottomNavigationBar: _buildYoutubeStyleBar(isDark),
-      ),
-    );
-  }
-
-  Widget _buildYoutubeStyleBar(bool isDark) {
-    final Color barColor = isDark ? Colors.grey[200]! : Colors.grey[900]!;
-    return Container(
-      decoration: BoxDecoration(
-        color: barColor,
-        border: Border(
-          top: BorderSide(
-            color: Colors.black.withValues(alpha: 0.05),
-            width: 0.5,
-          ),
-        ),
-      ),
-      child: SafeArea(
-        child: SizedBox(
-          height: 56,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _bottomActionItem(
-                Icons.history_edu_rounded,
-                'Remark',
-                isDark,
-                () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => RemarkPage(
-                        service: widget.driveService,
-                        spreadsheetId: widget.setInfo.sheetId,
-                        cardIndex: _currentPageIndex,
-                        columnIdx: widget.setInfo.remarkColIdx,
-                        initialRemark:
-                            _editedCards[_currentPageIndex]?.remark ?? '',
-                      ),
+        // SafeArea 적용: 하단 내비게이션 바 영역 보호
+        body: SafeArea(
+          bottom: true,
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: widget.cards.length,
+            onPageChanged: (idx) async {
+              FocusManager.instance.primaryFocus?.unfocus();
+              if (_currentPageIndex != idx) {
+                await _saveSingleCardChanges(_currentPageIndex);
+              }
+              setState(() => _currentPageIndex = idx);
+            },
+            itemBuilder: (context, index) {
+              final editableCard = _editedCards[index]!;
+              return AnimatedBuilder(
+                animation: _pageController,
+                builder: (context, child) {
+                  double page = _pageController.hasClients
+                      ? (_pageController.page ?? index.toDouble())
+                      : index.toDouble();
+                  double angle = (page - index) * (math.pi / 35);
+                  return Transform.rotate(
+                    angle: angle,
+                    child: CardEditor(
+                      key: ValueKey(editableCard.key),
+                      card: editableCard,
+                      cardIndex: index,
+                      setInfo: widget.setInfo,
+                      driveService: widget.driveService,
                     ),
                   );
                 },
-              ),
-              _bottomActionItem(Icons.flag_outlined, 'Flag', isDark, () {}),
-              _bottomActionItem(
-                Icons.ios_share_rounded,
-                'Share',
-                isDark,
-                () {},
-              ),
-              _bottomActionItem(Icons.more_vert_rounded, 'More', isDark, () {}),
-            ],
+              );
+            },
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _bottomActionItem(
-    IconData icon,
-    String label,
-    bool isDark,
-    VoidCallback onTap,
-  ) {
-    final Color itemColor = isDark ? Colors.black87 : Colors.white;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: SizedBox(
-        width: 60,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 22, color: itemColor),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(fontSize: 10, color: itemColor)),
-          ],
         ),
       ),
     );
@@ -312,77 +260,135 @@ class _CardEditorState extends State<CardEditor> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color cardBg = isDark ? AppColors.cDarkSurface : AppColors.cSlate50;
+    final Color borderColor = isDark
+        ? AppColors.cDarkBorder
+        : AppColors.cSlate200;
+    final Color itemColor = isDark ? AppColors.cSlate400 : AppColors.cSlate600;
+
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 10, 20, 30),
+      margin: const EdgeInsets.fromLTRB(10, 5, 10, 10),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(28),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: borderColor, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            children: [
-              Expanded(
-                child: Stack(
+        borderRadius: BorderRadius.circular(15),
+        child: Column(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(28, 0, 28, 0),
+                child: Column(
                   children: [
-                    _buildLabel('Source'),
-                    Center(child: _buildField(_frontController)),
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          Center(child: _buildField(_frontController, isDark)),
+                        ],
+                      ),
+                    ),
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: borderColor.withValues(alpha: 0.5),
+                    ),
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          Center(child: _buildField(_backController, isDark)),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
-              Divider(
-                height: 1,
-                thickness: 1,
-                color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
-              ),
-              Expanded(
-                child: Stack(
-                  children: [
-                    _buildLabel('Target'),
-                    Center(child: _buildField(_backController)),
-                  ],
+            ),
+            Container(
+              height: 40,
+              padding: const EdgeInsets.only(bottom: 2),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.1)
+                    : Colors.black.withValues(alpha: 0.02),
+                border: Border(
+                  top: BorderSide(
+                    color: borderColor.withValues(alpha: 0.5),
+                    width: 0.5,
+                  ),
                 ),
               ),
-            ],
-          ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _iconOnlyActionItem(Icons.history_edu_rounded, itemColor, () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => RemarkPage(
+                          service: widget.driveService,
+                          spreadsheetId: widget.setInfo.sheetId,
+                          cardIndex: widget.cardIndex,
+                          columnIdx: widget.setInfo.remarkColIdx,
+                          initialRemark: widget.card.remark,
+                        ),
+                      ),
+                    );
+                  }),
+                  _iconOnlyActionItem(Icons.flag_outlined, itemColor, () {}),
+                  _iconOnlyActionItem(
+                    Icons.ios_share_rounded,
+                    itemColor,
+                    () {},
+                  ),
+                  _iconOnlyActionItem(
+                    Icons.more_vert_rounded,
+                    itemColor,
+                    () {},
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildLabel(String label) {
-    return Align(
-      alignment: Alignment.topLeft,
-      child: Text(
-        label,
-        style: TextStyle(
-          color: Theme.of(context).primaryColor.withValues(alpha: 0.6),
-          fontSize: 13,
-          fontWeight: FontWeight.normal,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildField(TextEditingController controller) {
+  Widget _buildField(TextEditingController controller, bool isDark) {
     return TextField(
       controller: controller,
       maxLines: null,
       textAlign: TextAlign.left,
-      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      style: TextStyle(
+        fontSize: 19,
+        fontWeight: FontWeight.w700,
+        color: isDark ? AppColors.cSlate100 : AppColors.cSlate900,
+      ),
       decoration: const InputDecoration(
         border: InputBorder.none,
         isDense: true,
-        contentPadding: EdgeInsets.symmetric(vertical: 10),
+        contentPadding: EdgeInsets.symmetric(vertical: 8),
+      ),
+    );
+  }
+
+  Widget _iconOnlyActionItem(IconData icon, Color color, VoidCallback onTap) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        child: Center(child: Icon(icon, size: 20, color: color)),
       ),
     );
   }
