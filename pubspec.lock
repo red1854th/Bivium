@@ -408,6 +408,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.0.3"
+  re_editor:
+    dependency: "direct main"
+    description:
+      name: re_editor
+      sha256: c5f886ee762981387a2de91a96ef8d8393bba407ec31048fc496e53438d220b8
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.1"
+  re_highlight:
+    dependency: "direct main"
+    description:
+      name: re_highlight
+      sha256: "6c4ac3f76f939fb7ca9df013df98526634e17d8f7460e028bd23a035870024f2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.3"
   shared_preferences:
     dependency: "direct main"
     description:

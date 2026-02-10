@@ -3,7 +3,7 @@ import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/services/google_drive_service.dart';
 import 'package:bivium/features/detail/remark_page.dart';
 import 'package:bivium/core/theme.dart';
-import 'text_editor.dart';
+import 'package:bivium/features/editor/text_editor.dart';
 
 class CardEditor extends StatefulWidget {
   final Flashcard card;
@@ -50,11 +50,11 @@ class _CardEditorState extends State<CardEditor> {
         children: [
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
+              padding: const EdgeInsets.symmetric(horizontal: 0),
               child: Column(
                 children: [
                   Expanded(
-                    child: RichTextEditor(
+                    child: TextEditor(
                       initialContent: widget.card.front,
                       onChanged: (val) => widget.card.front = val,
                       fontSize: _fontSize,
@@ -64,7 +64,7 @@ class _CardEditorState extends State<CardEditor> {
                   ),
                   const Divider(height: 1),
                   Expanded(
-                    child: RichTextEditor(
+                    child: TextEditor(
                       initialContent: widget.card.back,
                       onChanged: (val) => widget.card.back = val,
                       fontSize: _fontSize,
