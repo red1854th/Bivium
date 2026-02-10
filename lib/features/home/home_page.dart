@@ -181,28 +181,33 @@ class _HomePageState extends State<HomePage> {
     FontWeight fontWeight = FontWeight.w400,
     Color? color,
   }) {
-    // 1. RTL 언어(아랍어, 히브리어, 이디시어 등) 포함 여부 자동 감지
+    // 1. RTL 언어 감지
     final bool hasRtl = RegExp(
       r'[\u0600-\u06FF\u0750-\u077F\u0590-\u05FF]',
     ).hasMatch(text);
+    // 2. 공백 포함 여부 확인 (중국어, 일본어 등 띄어쓰기 없는 언어 판별)
+    final bool hasSpace = text.contains(' ');
 
-    // 2. RTL 문자가 포함된 경우: 순서 역전 방지를 위해 시스템 전체 렌더링 사용
-    if (hasRtl) {
-      return Text(
-        text,
-        textAlign: TextAlign.center,
-        textDirection: TextDirection.rtl, // 우서식 강제
-        style: TextStyle(
-          fontSize: fontSize,
-          fontWeight: fontWeight,
-          color: color ?? (isDark ? Colors.white : AppColors.cSlate900),
-          letterSpacing: -0.2,
-          height: 1.4,
+    // RTL 언어이거나 띄어쓰기가 없는 언어(중국어, 일본어 등)인 경우
+    if (hasRtl || !hasSpace) {
+      return Container(
+        width: double.infinity,
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          textDirection: hasRtl ? TextDirection.rtl : TextDirection.ltr,
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: fontWeight,
+            color: color ?? (isDark ? Colors.white : AppColors.cSlate900),
+            letterSpacing: -0.2,
+            height: 1.4,
+          ),
         ),
       );
     }
 
-    // 3. 일반 언어(한국어, 영어 등)인 경우: 띄어쓰기 기준으로 가독성 있게 줄바꿈 (Wrap)
+    // 일반적인 띄어쓰기 언어(한국어, 영어 등)인 경우
     return Wrap(
       alignment: WrapAlignment.center,
       spacing: 4.0,
