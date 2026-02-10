@@ -190,7 +190,7 @@ class _HomePageState extends State<HomePage> {
 
     // RTL 언어이거나 띄어쓰기가 없는 언어(중국어, 일본어 등)인 경우
     if (hasRtl || !hasSpace) {
-      return Container(
+      return SizedBox(
         width: double.infinity,
         child: Text(
           text,
