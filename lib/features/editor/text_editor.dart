@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:re_editor/re_editor.dart';
-import 'package:re_highlight/languages/plaintext.dart';
 import 'highlight_rules.dart';
 import 'package:bivium/core/theme.dart';
 
@@ -28,8 +27,6 @@ class TextEditor extends StatefulWidget {
 class _TextEditorState extends State<TextEditor> {
   late CodeLineEditingController _controller;
   final FocusNode _focusNode = FocusNode();
-
-  // 툴바 제어를 위해 컨트롤러를 상단에 선언합니다.
   late final SelectionToolbarController _toolbarController;
 
   static const _shareChannel = MethodChannel('com.bivium.app/share');
@@ -40,7 +37,6 @@ class _TextEditorState extends State<TextEditor> {
     _controller = CodeLineEditingController();
     _controller.text = widget.initialContent;
 
-    // 툴바 컨트롤러 초기화
     _toolbarController = MobileSelectionToolbarController(
       builder: (context, controller) {
         return [
@@ -54,16 +50,13 @@ class _TextEditorState extends State<TextEditor> {
           ToolbarMenuItem(
             title: 'Share',
             onTap: () {
-              final CodeLineSelection selection = controller.selection;
-              final int start = selection.start.offset;
-              final int end = selection.end.offset;
-              if (start != end) {
-                final int min = start < end ? start : end;
-                final int max = start < end ? end : start;
-                final String selectedText = controller.text.substring(min, max);
-                if (selectedText.isNotEmpty) {
-                  _shareText(selectedText);
-                }
+              final selection = controller.selection;
+              if (!selection.isCollapsed) {
+                final text = controller.text.substring(
+                  selection.start.offset,
+                  selection.end.offset,
+                );
+                if (text.isNotEmpty) _shareText(text);
               }
             },
           ),
@@ -71,9 +64,7 @@ class _TextEditorState extends State<TextEditor> {
       },
     );
 
-    _controller.addListener(() {
-      widget.onChanged(_controller.text);
-    });
+    _controller.addListener(() => widget.onChanged(_controller.text));
   }
 
   @override
@@ -95,12 +86,10 @@ class _TextEditorState extends State<TextEditor> {
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // PopScope를 사용하여 뒤로 가기 시 툴바를 닫습니다.
     return PopScope(
       canPop: true,
-      onPopInvokedWithResult: (didPop, result) {
-        _toolbarController.hide(context);
-      },
+      onPopInvokedWithResult: (didPop, result) =>
+          _toolbarController.hide(context),
       child: Container(
         transform: Matrix4.translationValues(-10, 0, 0),
         child: CodeEditor(
@@ -108,7 +97,7 @@ class _TextEditorState extends State<TextEditor> {
           focusNode: _focusNode,
           autofocus: false,
           wordWrap: true,
-          toolbarController: _toolbarController, // 선언한 컨트롤러 사용
+          toolbarController: _toolbarController,
           indicatorBuilder:
               (context, editingController, chunkController, notifier) {
                 return Container(
@@ -123,7 +112,6 @@ class _TextEditorState extends State<TextEditor> {
                       fontSize: widget.fontSize,
                       fontFamily: widget.fontFamily,
                       height: widget.lineHeight,
-                      leadingDistribution: TextLeadingDistribution.even,
                     ),
                     focusedTextStyle: TextStyle(
                       color: AppColors.cBrand600,
@@ -131,7 +119,6 @@ class _TextEditorState extends State<TextEditor> {
                       fontFamily: widget.fontFamily,
                       fontWeight: FontWeight.bold,
                       height: widget.lineHeight,
-                      leadingDistribution: TextLeadingDistribution.even,
                     ),
                   ),
                 );
@@ -141,7 +128,10 @@ class _TextEditorState extends State<TextEditor> {
             fontFamily: widget.fontFamily,
             codeTheme: CodeHighlightTheme(
               languages: {
-                'plaintext': CodeHighlightThemeMode(mode: langPlaintext),
+                // HighlightRules에서 빌드된 모드를 주입하여 로직 분리
+                'plaintext': CodeHighlightThemeMode(
+                  mode: HighlightRules.buildMode(),
+                ),
               },
               theme: isDark ? _darkCodeTheme() : _lightCodeTheme(),
             ),
