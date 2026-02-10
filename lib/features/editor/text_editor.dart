@@ -98,6 +98,21 @@ class _TextEditorState extends State<TextEditor> {
           autofocus: false,
           wordWrap: true,
           toolbarController: _toolbarController,
+
+          // 소스 코드의 _CodeScrollable 구조에 맞춘 빌더 적용
+          scrollbarBuilder: (context, child, details) {
+            return RawScrollbar(
+              controller: details.controller,
+              thickness: 3.0,
+              radius: const Radius.circular(2),
+              thumbColor: isDark
+                  ? Colors.white.withValues(alpha: 0.2)
+                  : Colors.black.withValues(alpha: 0.1),
+              fadeDuration: const Duration(milliseconds: 300),
+              child: child,
+            );
+          },
+
           indicatorBuilder:
               (context, editingController, chunkController, notifier) {
                 return Container(
@@ -128,7 +143,6 @@ class _TextEditorState extends State<TextEditor> {
             fontFamily: widget.fontFamily,
             codeTheme: CodeHighlightTheme(
               languages: {
-                // HighlightRules에서 빌드된 모드를 주입하여 로직 분리
                 'plaintext': CodeHighlightThemeMode(
                   mode: HighlightRules.buildMode(),
                 ),

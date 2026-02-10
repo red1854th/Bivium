@@ -27,6 +27,8 @@ class EditCardPage extends StatefulWidget {
 class _EditCardPageState extends State<EditCardPage> {
   late PageController _pageController;
   late int _currentPageIndex;
+  // 스크롤 방향 상태 관리 (기본값: 가로)
+  Axis _scrollDirection = Axis.horizontal;
 
   @override
   void initState() {
@@ -76,7 +78,7 @@ class _EditCardPageState extends State<EditCardPage> {
       child: Scaffold(
         backgroundColor: isDark ? AppColors.cDarkSurface : AppColors.cSlate50,
         appBar: AppBar(
-          toolbarHeight: 30,
+          toolbarHeight: 40,
           leadingWidth: 48,
           systemOverlayStyle: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
@@ -85,13 +87,10 @@ class _EditCardPageState extends State<EditCardPage> {
                 : Brightness.dark,
           ),
           leading: Transform.translate(
-            offset: const Offset(4, -6),
+            offset: const Offset(4, 0),
             child: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: _handlePop,
-              splashColor: Colors.transparent,
-              highlightColor: Colors.transparent,
-              hoverColor: Colors.transparent,
             ),
           ),
           title: Text(
@@ -102,6 +101,25 @@ class _EditCardPageState extends State<EditCardPage> {
               color: isDark ? AppColors.cSlate200 : AppColors.cSlate800,
             ),
           ),
+          // 스크롤 방향 토글 버튼 추가
+          actions: [
+            IconButton(
+              icon: Icon(
+                _scrollDirection == Axis.horizontal
+                    ? Icons.swap_vert_rounded
+                    : Icons.swap_horiz_rounded,
+                size: 22,
+              ),
+              onPressed: () {
+                setState(() {
+                  _scrollDirection = _scrollDirection == Axis.horizontal
+                      ? Axis.vertical
+                      : Axis.horizontal;
+                });
+              },
+            ),
+            const SizedBox(width: 8),
+          ],
           elevation: 0,
           backgroundColor: Colors.transparent,
           centerTitle: true,
@@ -109,9 +127,10 @@ class _EditCardPageState extends State<EditCardPage> {
         body: SafeArea(
           child: Stack(
             children: [
-              // 메인 카드 뷰
               PageView.builder(
                 controller: _pageController,
+                // 동적 방향 적용
+                scrollDirection: _scrollDirection,
                 itemCount: widget.cards.length,
                 onPageChanged: (idx) {
                   _saveChanges(_currentPageIndex);
@@ -141,8 +160,7 @@ class _EditCardPageState extends State<EditCardPage> {
                   );
                 },
               ),
-
-              // 왼쪽 핸들
+              // 터치 핸들은 방향과 관계없이 항상 작동하도록 유지
               Positioned(
                 left: 0,
                 top: 0,
@@ -151,7 +169,6 @@ class _EditCardPageState extends State<EditCardPage> {
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   onTap: () {
-                    // 키보드가 닫혀 있을 때만(viewInsets.bottom == 0) 작동
                     if (MediaQuery.of(context).viewInsets.bottom == 0 &&
                         _currentPageIndex > 0) {
                       _pageController.previousPage(
@@ -162,8 +179,6 @@ class _EditCardPageState extends State<EditCardPage> {
                   },
                 ),
               ),
-
-              // 오른쪽 핸들
               Positioned(
                 right: 0,
                 top: 0,
@@ -172,7 +187,6 @@ class _EditCardPageState extends State<EditCardPage> {
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   onTap: () {
-                    // 키보드가 닫혀 있을 때만(viewInsets.bottom == 0) 작동
                     if (MediaQuery.of(context).viewInsets.bottom == 0 &&
                         _currentPageIndex < widget.cards.length - 1) {
                       _pageController.nextPage(

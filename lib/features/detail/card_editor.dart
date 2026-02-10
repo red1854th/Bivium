@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // 패키지 임포트
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/services/google_drive_service.dart';
 import 'package:bivium/features/detail/remark_page.dart';
@@ -29,6 +30,30 @@ class _CardEditorState extends State<CardEditor> {
   String _fontFamily = 'Pretendard';
   final List<String> _fonts = ['Pretendard', 'Roboto', 'NeoDGM'];
 
+  // 레이아웃 방향 상태 (기본값 true)
+  bool _isVertical = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLayoutPreference(); // 초기화 시 저장된 설정 불러오기
+  }
+
+  // 로컬 저장소에서 설정 불러오기
+  Future<void> _loadLayoutPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      // 저장된 값이 없으면 기본값인 true(상하)를 사용
+      _isVertical = prefs.getBool('is_editor_vertical') ?? true;
+    });
+  }
+
+  // 로컬 저장소에 설정 저장하기
+  Future<void> _saveLayoutPreference(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_editor_vertical', value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -49,31 +74,33 @@ class _CardEditorState extends State<CardEditor> {
       child: Column(
         children: [
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 0),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: TextEditor(
-                      initialContent: widget.card.front,
-                      onChanged: (val) => widget.card.front = val,
-                      fontSize: _fontSize,
-                      lineHeight: _lineHeight,
-                      fontFamily: _fontFamily,
-                    ),
+            child: Flex(
+              direction: _isVertical ? Axis.vertical : Axis.horizontal,
+              children: [
+                Expanded(
+                  child: TextEditor(
+                    initialContent: widget.card.front,
+                    onChanged: (val) => widget.card.front = val,
+                    fontSize: _fontSize,
+                    lineHeight: _lineHeight,
+                    fontFamily: _fontFamily,
                   ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: TextEditor(
-                      initialContent: widget.card.back,
-                      onChanged: (val) => widget.card.back = val,
-                      fontSize: _fontSize,
-                      lineHeight: _lineHeight,
-                      fontFamily: _fontFamily,
-                    ),
+                ),
+                Container(
+                  width: _isVertical ? double.infinity : 1,
+                  height: _isVertical ? 1 : double.infinity,
+                  color: isDark ? Colors.white10 : Colors.black12,
+                ),
+                Expanded(
+                  child: TextEditor(
+                    initialContent: widget.card.back,
+                    onChanged: (val) => widget.card.back = val,
+                    fontSize: _fontSize,
+                    lineHeight: _lineHeight,
+                    fontFamily: _fontFamily,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           _buildBottomToolbar(context),
@@ -83,16 +110,14 @@ class _CardEditorState extends State<CardEditor> {
   }
 
   Widget _buildBottomToolbar(BuildContext context) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       height: 40,
       decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withValues(alpha: 0.05)
-            : Colors.black.withValues(alpha: 0.02),
         border: Border(
           top: BorderSide(
-            color: isDark ? Colors.white10 : Colors.black12,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.white10
+                : Colors.black12,
             width: 0.5,
           ),
         ),
@@ -100,31 +125,48 @@ class _CardEditorState extends State<CardEditor> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _iconAction(Icons.history_edu_rounded, Colors.grey, () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => RemarkPage(
-                  service: widget.driveService,
-                  spreadsheetId: widget.setInfo.sheetId,
-                  cardIndex: widget.cardIndex,
-                  columnIdx: widget.setInfo.remarkColIdx,
-                  initialRemark: widget.card.remark,
-                ),
-              ),
-            );
-          }),
           _iconAction(
-            widget.card.isFlagged ? Icons.flag : Icons.flag_outlined,
-            widget.card.isFlagged ? Colors.orange : Colors.grey,
-            () =>
+            icon: Icons.history_edu_rounded,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => RemarkPage(
+                    service: widget.driveService,
+                    spreadsheetId: widget.setInfo.sheetId,
+                    cardIndex: widget.cardIndex,
+                    columnIdx: widget.setInfo.remarkColIdx,
+                    initialRemark: widget.card.remark,
+                  ),
+                ),
+              );
+            },
+          ),
+          _iconAction(
+            icon: widget.card.isFlagged ? Icons.flag : Icons.flag_outlined,
+            color: widget.card.isFlagged ? Colors.orange : Colors.grey,
+            onTap: () =>
                 setState(() => widget.card.isFlagged = !widget.card.isFlagged),
           ),
-          _iconAction(Icons.ios_share_rounded, Colors.grey, () {}),
+          // 토글 버튼: 상태 변경 시 로컬 저장소에 저장
           _iconAction(
-            Icons.more_vert_rounded,
-            Colors.grey,
-            () => _showSettingsMenu(context),
+            onTap: () {
+              final newValue = !_isVertical;
+              setState(() => _isVertical = newValue);
+              _saveLayoutPreference(newValue);
+            },
+            child: RotatedBox(
+              quarterTurns: _isVertical ? 0 : 1,
+              child: const Icon(
+                Icons.view_agenda_rounded,
+                size: 20,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          _iconAction(
+            icon: Icons.more_vert_rounded,
+            onTap: () => _showSettingsMenu(context),
           ),
         ],
       ),
@@ -217,11 +259,16 @@ class _CardEditorState extends State<CardEditor> {
     );
   }
 
-  Widget _iconAction(IconData icon, Color color, VoidCallback onTap) {
+  Widget _iconAction({
+    IconData? icon,
+    Color color = Colors.grey,
+    required VoidCallback onTap,
+    Widget? child,
+  }) {
     return Expanded(
       child: InkWell(
         onTap: onTap,
-        child: Icon(icon, size: 20, color: color),
+        child: Center(child: child ?? Icon(icon, size: 20, color: color)),
       ),
     );
   }
