@@ -48,21 +48,32 @@ class _HomePageState extends State<HomePage> {
   Future<void> _showEasterEgg() async {
     try {
       final String response = await rootBundle.loadString(
-        'assets/data/quotes.json',
+        'assets/data/quotes.txt',
       );
-      final List<dynamic> data = jsonDecode(response);
 
-      // 무작위 인덱스를 뽑되, 바로 직전에 본 인덱스는 제외하는 함수
-      Map<String, dynamic> getRandomQuote() {
-        if (data.length <= 1) return data[0]; // 데이터가 1개뿐이면 예외 처리
+      final List<String> blocks = response
+          .split('\t\t')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
 
+      if (blocks.isEmpty) return;
+
+      Map<String, String> getRandomQuote() {
         int nextIndex;
         do {
-          nextIndex = Random().nextInt(data.length);
-        } while (nextIndex == _lastViewedIndex); // 직전 인덱스와 같으면 다시 뽑기
+          nextIndex = Random().nextInt(blocks.length);
+        } while (nextIndex == _lastViewedIndex && blocks.length > 1);
 
-        _lastViewedIndex = nextIndex; // 현재 뽑은 인덱스를 기록
-        return data[nextIndex];
+        _lastViewedIndex = nextIndex;
+
+        final parts = blocks[nextIndex].split('\t');
+        return {
+          "original": parts.isNotEmpty ? parts[0].trim() : "",
+          "translation": parts.length > 1 ? parts[1].trim() : "번역 누락",
+          "author": parts.length > 2 ? parts[2].trim() : "작자 미상",
+          "extra": parts.length > 3 ? parts[3].trim() : "",
+        };
       }
 
       if (!mounted) return;
@@ -71,6 +82,7 @@ class _HomePageState extends State<HomePage> {
       showDialog(
         context: context,
         builder: (context) {
+          // 토글 상태 변수 제거 및 데이터 고정
           var currentData = getRandomQuote();
 
           return StatefulBuilder(
@@ -85,12 +97,11 @@ class _HomePageState extends State<HomePage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // 로고 클릭 시에만 새로운 명언 로드
                       GestureDetector(
-                        onTap: () {
-                          setDialogState(() {
-                            currentData = getRandomQuote();
-                          });
-                        },
+                        onTap: () => setDialogState(() {
+                          currentData = getRandomQuote();
+                        }),
                         child: Image.asset(
                           'assets/icon/app_logo.png',
                           width: 32,
@@ -99,40 +110,57 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Wrap(
-                        alignment: WrapAlignment.center,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 4.0,
-                        runSpacing: 4.0,
-                        children: currentData['quote']
-                            .toString()
-                            .split(' ')
-                            .map((word) {
-                              return Text(
-                                word,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: isDark
-                                      ? Colors.white
-                                      : AppColors.cSlate900,
-                                  letterSpacing: -0.2,
-                                ),
-                              );
-                            })
-                            .toList(),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "- ${currentData['author']}",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
+
+                      // 원문 (항상 상단 배치)
+                      if (currentData['original']!.isNotEmpty)
+                        _buildQuotationText(
+                          currentData['original']!,
+                          isDark,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+
+                      // 번역문 (항상 원문 아래 작게 배치)
+                      if (currentData['translation']!.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _buildQuotationText(
+                          currentData['translation']!,
+                          isDark,
+                          fontSize: 11,
                           color: isDark
                               ? AppColors.cSlate400
                               : AppColors.cSlate500,
                         ),
+                      ],
+
+                      const SizedBox(height: 12),
+
+                      // 저자 및 기타 정보
+                      Text(
+                        "- ${currentData['author']}",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: isDark
+                              ? AppColors.cSlate300
+                              : AppColors.cSlate700,
+                        ),
                       ),
+                      if (currentData['extra']!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          currentData['extra']!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isDark
+                                ? AppColors.cSlate500
+                                : AppColors.cSlate400,
+                            height: 1.2,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -144,6 +172,53 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       debugPrint("인용구 로드 실패: $e");
     }
+  }
+
+  Widget _buildQuotationText(
+    String text,
+    bool isDark, {
+    required double fontSize,
+    FontWeight fontWeight = FontWeight.w400,
+    Color? color,
+  }) {
+    // 1. RTL 언어(아랍어, 히브리어, 이디시어 등) 포함 여부 자동 감지
+    final bool hasRtl = RegExp(
+      r'[\u0600-\u06FF\u0750-\u077F\u0590-\u05FF]',
+    ).hasMatch(text);
+
+    // 2. RTL 문자가 포함된 경우: 순서 역전 방지를 위해 시스템 전체 렌더링 사용
+    if (hasRtl) {
+      return Text(
+        text,
+        textAlign: TextAlign.center,
+        textDirection: TextDirection.rtl, // 우서식 강제
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          color: color ?? (isDark ? Colors.white : AppColors.cSlate900),
+          letterSpacing: -0.2,
+          height: 1.4,
+        ),
+      );
+    }
+
+    // 3. 일반 언어(한국어, 영어 등)인 경우: 띄어쓰기 기준으로 가독성 있게 줄바꿈 (Wrap)
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 4.0,
+      runSpacing: 4.0,
+      children: text.split(' ').map((word) {
+        return Text(
+          word,
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: fontWeight,
+            color: color ?? (isDark ? Colors.white : AppColors.cSlate900),
+            letterSpacing: -0.2,
+          ),
+        );
+      }).toList(),
+    );
   }
 
   String uniquifyTitle(String title, List<String> existingTitles) {
