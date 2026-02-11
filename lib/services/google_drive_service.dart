@@ -85,20 +85,26 @@ class GoogleDriveService {
     }
   }
 
-  /// 스프레드시트 목록 가져오기 복구
   Future<List<SheetFile>> getSpreadsheets() async {
     final client = await _getAuthenticatedClient();
     if (client == null) return [];
     final driveApi = drive.DriveApi(client);
     try {
       final fileList = await driveApi.files.list(
+        // 쿼리는 기본 조건만 유지
         q: "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
         pageSize: 100,
-        $fields: 'files(id, name, modifiedTime)',
+        // capabilities(canEdit) 필드를 반드시 요청해야 합니다.
+        $fields: 'files(id, name, modifiedTime, capabilities(canEdit))',
         orderBy: 'modifiedTime desc',
       );
+
       if (fileList.files == null) return [];
+
       return fileList.files!
+          .where(
+            (file) => file.capabilities?.canEdit ?? false,
+          ) // 편집 권한이 true인 것만 필터링
           .map(
             (file) => SheetFile(
               id: file.id ?? '',
@@ -237,7 +243,7 @@ class GoogleDriveService {
           cardIndex,
           setInfo.backColIdx,
           card.back,
-          null,
+          color,
         ),
       ],
     );

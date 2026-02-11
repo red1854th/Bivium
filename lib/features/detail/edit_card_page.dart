@@ -5,6 +5,7 @@ import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/services/google_drive_service.dart';
 import 'package:bivium/core/theme.dart';
 import 'card_editor.dart';
+import 'package:bivium/widgets/card_jump_dialog.dart';
 
 class EditCardPage extends StatefulWidget {
   final List<Flashcard> cards;
@@ -27,7 +28,6 @@ class EditCardPage extends StatefulWidget {
 class _EditCardPageState extends State<EditCardPage> {
   late PageController _pageController;
   late int _currentPageIndex;
-  // 스크롤 방향 상태 관리 (기본값: 가로)
   Axis _scrollDirection = Axis.horizontal;
 
   @override
@@ -59,6 +59,24 @@ class _EditCardPageState extends State<EditCardPage> {
     if (mounted) Navigator.of(context).pop(widget.cards);
   }
 
+  void _showCardJumpDialog() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      barrierColor: isDark ? Colors.white10 : Colors.black45,
+      builder: (context) {
+        return CardJumpDialog(
+          cards: widget.cards,
+          currentPageIndex: _currentPageIndex,
+          onCardSelected: (index) {
+            _pageController.jumpToPage(index);
+          },
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _pageController.dispose();
@@ -79,29 +97,31 @@ class _EditCardPageState extends State<EditCardPage> {
         backgroundColor: isDark ? AppColors.cDarkSurface : AppColors.cSlate50,
         appBar: AppBar(
           toolbarHeight: 40,
-          leadingWidth: 48,
           systemOverlayStyle: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
             statusBarIconBrightness: isDark
                 ? Brightness.light
                 : Brightness.dark,
           ),
-          leading: Transform.translate(
-            offset: const Offset(4, 0),
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: _handlePop,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _handlePop,
+          ),
+          title: InkWell(
+            onTap: _showCardJumpDialog,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: Text(
+                '${_currentPageIndex + 1}/${widget.cards.length}',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.cSlate200 : AppColors.cSlate800,
+                ),
+              ),
             ),
           ),
-          title: Text(
-            '${_currentPageIndex + 1}/${widget.cards.length}',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: isDark ? AppColors.cSlate200 : AppColors.cSlate800,
-            ),
-          ),
-          // 스크롤 방향 토글 버튼 추가
           actions: [
             IconButton(
               icon: Icon(
@@ -110,13 +130,11 @@ class _EditCardPageState extends State<EditCardPage> {
                     : Icons.swap_horiz_rounded,
                 size: 22,
               ),
-              onPressed: () {
-                setState(() {
-                  _scrollDirection = _scrollDirection == Axis.horizontal
-                      ? Axis.vertical
-                      : Axis.horizontal;
-                });
-              },
+              onPressed: () => setState(
+                () => _scrollDirection = _scrollDirection == Axis.horizontal
+                    ? Axis.vertical
+                    : Axis.horizontal,
+              ),
             ),
             const SizedBox(width: 8),
           ],
@@ -129,7 +147,6 @@ class _EditCardPageState extends State<EditCardPage> {
             children: [
               PageView.builder(
                 controller: _pageController,
-                // 동적 방향 적용
                 scrollDirection: _scrollDirection,
                 itemCount: widget.cards.length,
                 onPageChanged: (idx) {
@@ -160,46 +177,39 @@ class _EditCardPageState extends State<EditCardPage> {
                   );
                 },
               ),
-              // 터치 핸들은 방향과 관계없이 항상 작동하도록 유지
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: 40,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () {
-                    if (MediaQuery.of(context).viewInsets.bottom == 0 &&
-                        _currentPageIndex > 0) {
-                      _pageController.previousPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    }
-                  },
-                ),
-              ),
-              Positioned(
-                right: 0,
-                top: 0,
-                bottom: 0,
-                width: 40,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () {
-                    if (MediaQuery.of(context).viewInsets.bottom == 0 &&
-                        _currentPageIndex < widget.cards.length - 1) {
-                      _pageController.nextPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    }
-                  },
-                ),
-              ),
+              _buildEdgeHandle(isLeft: true),
+              _buildEdgeHandle(isLeft: false),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildEdgeHandle({required bool isLeft}) {
+    return Positioned(
+      left: isLeft ? 0 : null,
+      right: isLeft ? null : 0,
+      top: 0,
+      bottom: 0,
+      width: 40,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          if (MediaQuery.of(context).viewInsets.bottom == 0) {
+            if (isLeft && _currentPageIndex > 0) {
+              _pageController.previousPage(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            } else if (!isLeft && _currentPageIndex < widget.cards.length - 1) {
+              _pageController.nextPage(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            }
+          }
+        },
       ),
     );
   }

@@ -19,6 +19,7 @@ dependencies:
   uuid: ^4.4.0
   re_editor: ^0.1.1
   re_highlight: ^0.0.3
+  easy_localization: ^3.0.8
 
 dev_dependencies:
   flutter_test:
@@ -34,9 +35,9 @@ flutter:
     - assets/icon/
     - assets/NIKLdic/
     - assets/data/quotes.txt
-    - assets/fonts/ # 폰트 폴더 자체를 등록해두는 것이 안전합니다.
+    - assets/fonts/
+    - assets/localization/
 
-  # 모든 폰트는 하나의 fonts 섹션에 모아야 합니다.
   fonts:
     - family: Roboto
       fonts:
