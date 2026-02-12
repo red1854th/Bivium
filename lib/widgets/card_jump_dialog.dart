@@ -247,11 +247,10 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
             widget.onCardSelected(originalIndex);
           },
           child: Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              // 플래그된 카드는 요청하신 배경색 적용
               color: card.isFlagged
-                  ? const Color(0xFF4D4000)
+                  ? (isDark ? const Color(0xFF4D4000) : const Color(0xFFFFF9C4))
                   : (isDark ? AppColors.cSlate900 : AppColors.cSlate50),
               border: Border.all(
                 color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
@@ -261,36 +260,53 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      '#${originalIndex + 1}',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.cBrand600,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        card.key.isEmpty ? "" : card.key,
+                // 첫 번째 줄: 인덱스, 키, 그리고 비고/플래그 버튼
+                SizedBox(
+                  height: 28,
+                  child: Row(
+                    children: [
+                      Text(
+                        '#${originalIndex + 1}',
                         style: const TextStyle(
-                          fontSize: 9,
-                          color: Colors.grey,
-                          fontFamily: 'monospace',
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.cBrand600,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    // 플래그 아이콘 위치를 다시 이전처럼 텍스트 바로 옆으로 복구
-                    if (card.isFlagged) ...[
-                      const SizedBox(width: 4),
-                      const Icon(Icons.flag, size: 12, color: Colors.orange),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          card.key.isEmpty ? "" : card.key,
+                          style: const TextStyle(
+                            fontSize: 9,
+                            color: Colors.grey,
+                            fontFamily: 'monospace',
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      // 비고 아이콘 (단순 표시용)
+                      Icon(
+                        Icons.history_edu_rounded,
+                        size: 14,
+                        color: card.remark.isNotEmpty
+                            ? AppColors.cBrand600
+                            : Colors.grey.withValues(alpha: 0.5),
+                      ),
+                      const SizedBox(width: 6),
+                      // 플래그 아이콘 (상태 표시)
+                      Icon(
+                        card.isFlagged ? Icons.flag : Icons.flag_outlined,
+                        size: 14,
+                        color: card.isFlagged
+                            ? Colors.orange
+                            : Colors.grey.withValues(alpha: 0.5),
+                      ),
                     ],
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
+                // 두 번째 줄: 앞면 | 뒷면
                 Row(
                   children: [
                     Expanded(

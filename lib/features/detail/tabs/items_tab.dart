@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/services/google_drive_service.dart';
+import 'package:bivium/features/detail/remark_page.dart';
 import '../../../core/theme.dart';
 import '../edit_card_page.dart';
 
@@ -30,7 +31,6 @@ class _ItemsTabState extends State<ItemsTab> {
   final TextEditingController _searchController = TextEditingController();
   final ValueNotifier<double> _scrollProgress = ValueNotifier(0.0);
 
-  // 하이라이트 상태 관리를 위한 변수
   int? _highlightedIndex;
 
   @override
@@ -78,6 +78,45 @@ class _ItemsTabState extends State<ItemsTab> {
     final double ratio = (localPosition.dy / height).clamp(0.0, 1.0);
     controller.position.jumpTo(ratio * maxScroll);
     HapticFeedback.selectionClick();
+  }
+
+  void _openRemark(Flashcard card, int originalIndex) {
+    HapticFeedback.lightImpact();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RemarkPage(
+          service: widget.driveService,
+          spreadsheetId: widget.setInfo.sheetId,
+          cardIndex: originalIndex,
+          columnIdx: widget.setInfo.remarkColIdx,
+          initialRemark: card.remark,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleFlag(Flashcard card, int originalIndex) async {
+    HapticFeedback.selectionClick();
+    final bool newFlagStatus = !card.isFlagged;
+
+    setState(() => card.isFlagged = newFlagStatus);
+    widget.onRefresh(widget.cards);
+
+    try {
+      await widget.driveService.updateFlashcard(
+        spreadsheetId: widget.setInfo.sheetId,
+        cardIndex: originalIndex,
+        setInfo: widget.setInfo,
+        card: card,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('시트 동기화 실패: $e')));
+      }
+    }
   }
 
   @override
@@ -167,15 +206,11 @@ class _ItemsTabState extends State<ItemsTab> {
                   final lastIndex = result['lastIndex'] as int;
                   widget.onRefresh(updatedCards);
 
-                  // 스크롤 이동과 하이라이트 시작 타이밍 맞추기
                   if (widget.scrollController?.hasClients ?? false) {
                     widget.scrollController!.jumpTo(lastIndex * 82.0);
                   }
 
-                  // 스크롤이 끝난 직후 하이라이트 트리거
                   setState(() => _highlightedIndex = lastIndex);
-
-                  // 100ms 유지 후 스르륵 사라짐 (400ms 애니메이션 시작)
                   Future.delayed(const Duration(milliseconds: 100), () {
                     if (mounted) setState(() => _highlightedIndex = null);
                   });
@@ -194,11 +229,8 @@ class _ItemsTabState extends State<ItemsTab> {
               ),
             ),
           ),
-
-          // [중요] if 문을 제거하고 색상값으로만 제어해야 스르륵 소멸함
           IgnorePointer(
             child: AnimatedContainer(
-              // 나타날 땐 즉시(0), 사라질 땐 부드럽게(400ms)
               duration: isHighlighted
                   ? Duration.zero
                   : const Duration(milliseconds: 400),
@@ -206,7 +238,6 @@ class _ItemsTabState extends State<ItemsTab> {
               height: 82.0,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                // 투명도 0.0과 0.3 사이를 보간하여 애니메이션 생성
                 color: Theme.of(
                   context,
                 ).highlightColor.withValues(alpha: isHighlighted ? 0.3 : 0.0),
@@ -221,45 +252,55 @@ class _ItemsTabState extends State<ItemsTab> {
   Widget _buildCardContent(Flashcard card, int originalIndex, bool isDark) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Text(
-              '#${originalIndex + 1}',
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: AppColors.cBrand600,
+        SizedBox(
+          height: 32,
+          child: Row(
+            children: [
+              Text(
+                '#${originalIndex + 1}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.cBrand600,
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(
-                      card.key.isEmpty ? "" : card.key,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey,
-                        fontFamily: 'monospace',
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  card.key.isEmpty ? "" : card.key,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey,
+                    fontFamily: 'monospace',
                   ),
-                  if (card.isFlagged) ...[
-                    const SizedBox(width: 4),
-                    const Icon(Icons.flag, size: 14, color: Colors.orange),
-                  ],
-                ],
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
-          ],
+              _buildSmallActionIcon(
+                icon: Icons.history_edu_rounded,
+                color: card.remark.isNotEmpty
+                    ? AppColors.cBrand600
+                    : Colors.grey.withValues(alpha: 0.5),
+                onTap: () => _openRemark(card, originalIndex),
+                isDark: isDark,
+              ),
+              const SizedBox(width: 6),
+              _buildSmallActionIcon(
+                icon: card.isFlagged ? Icons.flag : Icons.flag_outlined,
+                color: card.isFlagged
+                    ? Colors.orange
+                    : Colors.grey.withValues(alpha: 0.5),
+                onTap: () => _toggleFlag(card, originalIndex),
+                isDark: isDark,
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 2),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Text(
@@ -293,6 +334,28 @@ class _ItemsTabState extends State<ItemsTab> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildSmallActionIcon({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
+    return Material(
+      color: isDark
+          ? Colors.white.withValues(alpha: 0.05)
+          : Colors.black.withValues(alpha: 0.03),
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, size: 16, color: color),
+        ),
+      ),
     );
   }
 
