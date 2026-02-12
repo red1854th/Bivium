@@ -7,8 +7,6 @@
     "search": "Search",
     "settings": "Settings",
     "add_project": "Add Project",
-    "missing_translation": "Missing translation",
-    "unknown_author": "Unknown author",
     "error_loading_quote": "Failed to load quotes",
     "add_new_set": "Add New Set",
     "add_set_desc": "Paste a Google Spreadsheet URL or pick a sheet from Drive.",

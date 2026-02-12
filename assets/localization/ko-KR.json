@@ -7,8 +7,6 @@
     "search": "검색",
     "settings": "설정",
     "add_project": "프로젝트 추가",
-    "missing_translation": "번역 누락",
-    "unknown_author": "작자 미상",
     "error_loading_quote": "인용구 로드 실패",
     "add_new_set": "새 세트 추가",
     "add_set_desc": "구글 스프레드시트 URL을 붙여넣거나 드라이브에서 시트를 선택하세요.",

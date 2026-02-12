@@ -7,8 +7,6 @@
     "search": "検索",
     "settings": "設定",
     "add_project": "プロジェクト追加",
-    "missing_translation": "翻訳なし",
-    "unknown_author": "不明な作成者",
     "error_loading_quote": "名言の読み込みに失敗しました",
     "add_new_set": "新しいセットを追加",
     "add_set_desc": "Google スプレッドシートのURLを貼り付けるか、ドライブから選択してください。",
