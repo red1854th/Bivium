@@ -105,7 +105,9 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
           width: size.width * 0.9,
           height: size.height * 0.65,
           decoration: BoxDecoration(
-            color: isDark ? AppColors.cDarkSurface : Colors.white,
+            color: isDark
+                ? AppColors.cDarkSurface.withValues(alpha: 0.5)
+                : Colors.white.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(24),
           ),
           child: Column(

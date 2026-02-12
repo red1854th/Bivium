@@ -142,7 +142,6 @@ class _ItemsTabState extends State<ItemsTab> {
       padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 16.0),
       child: Stack(
         children: [
-          // 1. 기본 카드 구조
           Material(
             color: card.isFlagged
                 ? (isDark ? const Color(0xFF4D4000) : const Color(0xFFFFF9C4))
@@ -168,13 +167,16 @@ class _ItemsTabState extends State<ItemsTab> {
                   final lastIndex = result['lastIndex'] as int;
                   widget.onRefresh(updatedCards);
 
+                  // 스크롤 이동과 하이라이트 시작 타이밍 맞추기
                   if (widget.scrollController?.hasClients ?? false) {
                     widget.scrollController!.jumpTo(lastIndex * 82.0);
                   }
 
-                  // 돌아왔을 때 반짝 효과 트리거
+                  // 스크롤이 끝난 직후 하이라이트 트리거
                   setState(() => _highlightedIndex = lastIndex);
-                  Future.delayed(const Duration(milliseconds: 400), () {
+
+                  // 100ms 유지 후 스르륵 사라짐 (400ms 애니메이션 시작)
+                  Future.delayed(const Duration(milliseconds: 100), () {
                     if (mounted) setState(() => _highlightedIndex = null);
                   });
                 }
@@ -193,24 +195,24 @@ class _ItemsTabState extends State<ItemsTab> {
             ),
           ),
 
-          // 2. [추가] 터치 하이라이트 레이어
-          if (isHighlighted)
-            IgnorePointer(
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 300),
-                opacity: isHighlighted ? 1.0 : 0.0,
-                child: Container(
-                  height: 82.0,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    // 시스템 하이라이트 컬러를 사용하여 모드에 자동 대응
-                    color: Theme.of(
-                      context,
-                    ).highlightColor.withValues(alpha: 0.3),
-                  ),
-                ),
+          // [중요] if 문을 제거하고 색상값으로만 제어해야 스르륵 소멸함
+          IgnorePointer(
+            child: AnimatedContainer(
+              // 나타날 땐 즉시(0), 사라질 땐 부드럽게(400ms)
+              duration: isHighlighted
+                  ? Duration.zero
+                  : const Duration(milliseconds: 400),
+              curve: Curves.easeOut,
+              height: 82.0,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                // 투명도 0.0과 0.3 사이를 보간하여 애니메이션 생성
+                color: Theme.of(
+                  context,
+                ).highlightColor.withValues(alpha: isHighlighted ? 0.3 : 0.0),
               ),
             ),
+          ),
         ],
       ),
     );
@@ -294,7 +296,6 @@ class _ItemsTabState extends State<ItemsTab> {
     );
   }
 
-  // 기존 검색창 및 인디케이터 트랙 위젯 로직 동일...
   Widget _buildIndicatorTrack(bool isDark) {
     return ValueListenableBuilder<double>(
       valueListenable: _scrollProgress,
