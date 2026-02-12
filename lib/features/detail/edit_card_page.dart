@@ -56,7 +56,11 @@ class _EditCardPageState extends State<EditCardPage> {
   void _handlePop() {
     FocusManager.instance.primaryFocus?.unfocus();
     _saveChanges(_currentPageIndex);
-    if (mounted) Navigator.of(context).pop(widget.cards);
+    if (mounted) {
+      Navigator.of(
+        context,
+      ).pop({'cards': widget.cards, 'lastIndex': _currentPageIndex});
+    }
   }
 
   void _showCardJumpDialog() {

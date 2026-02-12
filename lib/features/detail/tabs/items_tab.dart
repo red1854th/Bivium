@@ -30,6 +30,9 @@ class _ItemsTabState extends State<ItemsTab> {
   final TextEditingController _searchController = TextEditingController();
   final ValueNotifier<double> _scrollProgress = ValueNotifier(0.0);
 
+  // 하이라이트 상태 관리를 위한 변수
+  int? _highlightedIndex;
+
   @override
   void initState() {
     super.initState();
@@ -73,7 +76,6 @@ class _ItemsTabState extends State<ItemsTab> {
 
     final double maxScroll = controller.position.maxScrollExtent;
     final double ratio = (localPosition.dy / height).clamp(0.0, 1.0);
-
     controller.position.jumpTo(ratio * maxScroll);
     HapticFeedback.selectionClick();
   }
@@ -102,19 +104,18 @@ class _ItemsTabState extends State<ItemsTab> {
                     child: ListView.builder(
                       controller: widget.scrollController,
                       physics: const AlwaysScrollableScrollPhysics(),
-                      // 스크롤 바 공간 확보를 위해 우측 패딩을 32로 조정
                       padding: const EdgeInsets.fromLTRB(0, 8, 8, 24),
                       itemCount: _filteredCards.length,
                       itemExtent: 82.0,
                       itemBuilder: (context, index) =>
-                          _buildCardItem(_filteredCards[index], isDark),
+                          _buildCardItem(_filteredCards[index], isDark, index),
                     ),
                   ),
                   Positioned(
                     right: 0,
                     top: 0,
                     bottom: 0,
-                    width: 40, // 터치 감지 영역 유지
+                    width: 40,
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onVerticalDragUpdate: (d) =>
@@ -133,16 +134,176 @@ class _ItemsTabState extends State<ItemsTab> {
     );
   }
 
+  Widget _buildCardItem(Flashcard card, bool isDark, int index) {
+    final int originalIndex = widget.cards.indexOf(card);
+    final bool isHighlighted = _highlightedIndex == index;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 16.0),
+      child: Stack(
+        children: [
+          // 1. 기본 카드 구조
+          Material(
+            color: card.isFlagged
+                ? (isDark ? const Color(0xFF4D4000) : const Color(0xFFFFF9C4))
+                : (isDark ? AppColors.cDarkSurface : Colors.white),
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () async {
+                HapticFeedback.lightImpact();
+                final dynamic result = await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => EditCardPage(
+                      initialCardIndex: originalIndex,
+                      cards: List<Flashcard>.from(widget.cards),
+                      setInfo: widget.setInfo,
+                      driveService: widget.driveService,
+                    ),
+                  ),
+                );
+
+                if (result != null && result is Map) {
+                  final updatedCards = result['cards'] as List<Flashcard>;
+                  final lastIndex = result['lastIndex'] as int;
+                  widget.onRefresh(updatedCards);
+
+                  if (widget.scrollController?.hasClients ?? false) {
+                    widget.scrollController!.jumpTo(lastIndex * 82.0);
+                  }
+
+                  // 돌아왔을 때 반짝 효과 트리거
+                  setState(() => _highlightedIndex = lastIndex);
+                  Future.delayed(const Duration(milliseconds: 400), () {
+                    if (mounted) setState(() => _highlightedIndex = null);
+                  });
+                }
+              },
+              child: Container(
+                height: 82.0,
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: _buildCardContent(card, originalIndex, isDark),
+              ),
+            ),
+          ),
+
+          // 2. [추가] 터치 하이라이트 레이어
+          if (isHighlighted)
+            IgnorePointer(
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 300),
+                opacity: isHighlighted ? 1.0 : 0.0,
+                child: Container(
+                  height: 82.0,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    // 시스템 하이라이트 컬러를 사용하여 모드에 자동 대응
+                    color: Theme.of(
+                      context,
+                    ).highlightColor.withValues(alpha: 0.3),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardContent(Flashcard card, int originalIndex, bool isDark) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              '#${originalIndex + 1}',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: AppColors.cBrand600,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      card.key.isEmpty ? "" : card.key,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey,
+                        fontFamily: 'monospace',
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (card.isFlagged) ...[
+                    const SizedBox(width: 4),
+                    const Icon(Icons.flag, size: 14, color: Colors.orange),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                card.front.replaceAll('\n', ' '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                '|',
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                card.back.replaceAll('\n', ' '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // 기존 검색창 및 인디케이터 트랙 위젯 로직 동일...
   Widget _buildIndicatorTrack(bool isDark) {
     return ValueListenableBuilder<double>(
       valueListenable: _scrollProgress,
       builder: (context, progress, _) {
         return Container(
-          // 우측 여백을 8로 늘려 벽에서 띄움
           margin: const EdgeInsets.only(right: 8),
           alignment: Alignment.centerRight,
           child: Container(
-            width: 6, // 두께를 6으로 확장
+            width: 6,
             height: double.infinity,
             decoration: BoxDecoration(
               color: isDark ? Colors.white10 : Colors.black12,
@@ -151,7 +312,7 @@ class _ItemsTabState extends State<ItemsTab> {
             child: Align(
               alignment: Alignment(0, (progress * 2) - 1),
               child: Container(
-                width: 6, // 인디케이터 두께 6
+                width: 6,
                 height: 50,
                 decoration: BoxDecoration(
                   color: AppColors.cBrand600,
@@ -176,125 +337,13 @@ class _ItemsTabState extends State<ItemsTab> {
           prefixIcon: const Icon(Icons.search, size: 20),
           filled: true,
           fillColor: isDark
-              ? Colors.white.withOpacity(0.05)
+              ? Colors.white.withValues(alpha: 0.05)
               : AppColors.cSlate100,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
           contentPadding: EdgeInsets.zero,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCardItem(Flashcard card, bool isDark) {
-    final int originalIndex = widget.cards.indexOf(card);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 16.0),
-      child: Material(
-        color: card.isFlagged
-            ? (isDark ? const Color(0xFF4D4000) : const Color(0xFFFFF9C4))
-            : (isDark ? AppColors.cDarkSurface : Colors.white),
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () async {
-            HapticFeedback.lightImpact();
-            final List<Flashcard>? updated = await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => EditCardPage(
-                  initialCardIndex: originalIndex,
-                  cards: List<Flashcard>.from(widget.cards),
-                  setInfo: widget.setInfo,
-                  driveService: widget.driveService,
-                ),
-              ),
-            );
-            if (updated != null) widget.onRefresh(updated);
-          },
-          child: Container(
-            padding: const EdgeInsets.only(
-              top: 11.0,
-              bottom: 10.0,
-              left: 16.0,
-              right: 16.0,
-            ),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      '#${originalIndex + 1}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.cBrand600,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        card.key.isEmpty ? "N/A" : card.key,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
-                          fontFamily: 'monospace',
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        card.front.replaceAll('\n', ' '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text(
-                        '|',
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        card.back.replaceAll('\n', ' '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.left,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDark
-                              ? AppColors.cSlate400
-                              : AppColors.cSlate600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
