@@ -205,9 +205,7 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
 
           prefixIcon: const Icon(Icons.search, size: 20),
           filled: true,
-          fillColor: isDark
-              ? Colors.white.withValues(alpha: 0.05)
-              : AppColors.cSlate100,
+          fillColor: isDark ? AppColors.cSlate800 : AppColors.cSlate100,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,

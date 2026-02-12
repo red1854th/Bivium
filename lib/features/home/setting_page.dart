@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart'; // Cupertino 스타일 추가
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -79,10 +80,45 @@ class _SettingPageState extends State<SettingPage> {
     widget.onThemeChanged?.call();
   }
 
+  // 언어 선택 시트 호출 함수
+  void _showLanguagePicker(BuildContext context, bool isDark) {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: Text('language_settings'.tr()),
+        actions: AppLocale.supported.map((appLocale) {
+          final isSelected = context.locale == appLocale.locale;
+          return CupertinoActionSheetAction(
+            onPressed: () {
+              context.setLocale(appLocale.locale);
+              Navigator.pop(context);
+            },
+            // 현재 선택된 언어는 볼드체로 강조
+            child: Text(
+              appLocale.displayName,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? AppColors.cBrand600 : null,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final account = _account;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // 현재 설정된 언어의 표시 이름 찾기
+    final currentLanguageName = AppLocale.supported
+        .firstWhere(
+          (e) => e.locale == context.locale,
+          orElse: () => AppLocale.supported.first,
+        )
+        .displayName;
 
     return Scaffold(
       backgroundColor: ThemeService.getBackgroundColor(isDark),
@@ -119,32 +155,30 @@ class _SettingPageState extends State<SettingPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // 언어 설정 (AppLocale 활용)
+                  // 언어 설정 (Dropdown 대신 모달 호출 방식)
                   _buildSettingTile(
                     isDark,
                     icon: Icons.language,
                     label: 'language_settings'.tr(),
-                    trailing: DropdownButton<Locale>(
-                      value: context.locale,
-                      onChanged: (Locale? newLocale) {
-                        if (newLocale != null) context.setLocale(newLocale);
-                      },
-                      underline: const SizedBox(),
-                      // AppLocale.supported 리스트를 직접 사용하여 UI 구성
-                      items: AppLocale.supported.map((appLocale) {
-                        return DropdownMenuItem(
-                          value: appLocale.locale,
-                          child: Text(
-                            appLocale.displayName,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: isDark
-                                  ? Colors.white
-                                  : AppColors.cSlate900,
-                            ),
+                    onTap: () => _showLanguagePicker(context, isDark),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          currentLanguageName,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDark
+                                ? AppColors.cSlate400
+                                : AppColors.cSlate500,
                           ),
-                        );
-                      }).toList(),
+                        ),
+                        const Icon(
+                          Icons.chevron_right,
+                          size: 20,
+                          color: AppColors.cSlate400,
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -250,31 +284,40 @@ class _SettingPageState extends State<SettingPage> {
     );
   }
 
+  // InkWell을 추가하여 타일 전체 클릭 가능하게 변경
   Widget _buildSettingTile(
     bool isDark, {
     required IconData icon,
     required String label,
     required Widget trailing,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: _tileDecoration(isDark),
-      child: Row(
-        children: [
-          Icon(icon, color: isDark ? Colors.white : AppColors.cSlate600),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white : AppColors.cSlate900,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        // vertical 패딩을 줄이거나 조정하여 고정 높이 내에서 중앙 정렬되게 합니다.
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        // 타일의 최소 높이를 56으로 고정 (Switch의 기본 높이와 유사하게 맞춤)
+        constraints: const BoxConstraints(minHeight: 70),
+        decoration: _tileDecoration(isDark),
+        child: Row(
+          children: [
+            Icon(icon, color: isDark ? Colors.white : AppColors.cSlate600),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : AppColors.cSlate900,
+                ),
               ),
             ),
-          ),
-          trailing,
-        ],
+            // trailing 위젯이 중앙에 오도록 배치
+            Center(child: trailing),
+          ],
+        ),
       ),
     );
   }
