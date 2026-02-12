@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:bivium/models/flashcard.dart';
@@ -50,7 +52,7 @@ class _EditCardPageState extends State<EditCardPage> {
           setInfo: widget.setInfo,
           card: card,
         )
-        .catchError((e) => debugPrint('백그라운드 저장 실패: $e'));
+        .catchError((e) => debugPrint('${'background_save_failed'.tr()}: $e'));
   }
 
   void _handlePop() {

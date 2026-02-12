@@ -1,5 +1,6 @@
 import 'package:bivium/models/flashcard.dart';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class GlossaryEntry {
   String source;
@@ -29,24 +30,25 @@ class _GlossaryTabState extends State<GlossaryTab> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Add Glossary Entry'),
+          title: Text('add_glossary_entry'.tr()),
+
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: sourceController,
-                decoration: const InputDecoration(labelText: 'Source'),
+                decoration: InputDecoration(labelText: 'source_label'.tr()),
               ),
               TextField(
                 controller: targetController,
-                decoration: const InputDecoration(labelText: 'Target'),
+                decoration: InputDecoration(labelText: 'target_label'.tr()),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+              child: Text('cancel'.tr()),
             ),
             TextButton(
               onPressed: () {
@@ -63,7 +65,7 @@ class _GlossaryTabState extends State<GlossaryTab> {
                   Navigator.of(context).pop();
                 }
               },
-              child: const Text('Add'),
+              child: Text('add'.tr()),
             ),
           ],
         );

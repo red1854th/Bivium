@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +13,7 @@ import 'add_set_dialog.dart';
 import 'setting_page.dart';
 import 'package:bivium/features/detail/detail_page.dart';
 import 'package:bivium/features/home/edit_project_page.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 List<FlashcardSet> _parseFlashcardSets(String setsJson) {
   final List<dynamic> decoded = jsonDecode(setsJson);
@@ -70,8 +72,11 @@ class _HomePageState extends State<HomePage> {
         final parts = blocks[nextIndex].split('\t');
         return {
           "original": parts.isNotEmpty ? parts[0].trim() : "",
-          "translation": parts.length > 1 ? parts[1].trim() : "번역 누락",
-          "author": parts.length > 2 ? parts[2].trim() : "작자 미상",
+          "translation": parts.length > 1
+              ? parts[1].trim()
+              : "missing_translation".tr(),
+          "author": parts.length > 2 ? parts[2].trim() : "unknown_author".tr(),
+
           "extra": parts.length > 3 ? parts[3].trim() : "",
         };
       }
@@ -170,7 +175,7 @@ class _HomePageState extends State<HomePage> {
         },
       );
     } catch (e) {
-      debugPrint("인용구 로드 실패: $e");
+      debugPrint("${"error_loading_quote".tr()}: $e");
     }
   }
 
@@ -195,7 +200,8 @@ class _HomePageState extends State<HomePage> {
         child: Text(
           text,
           textAlign: TextAlign.center,
-          textDirection: hasRtl ? TextDirection.rtl : TextDirection.ltr,
+          textDirection: hasRtl ? ui.TextDirection.rtl : ui.TextDirection.ltr,
+
           style: TextStyle(
             fontSize: fontSize,
             fontWeight: fontWeight,
@@ -288,7 +294,8 @@ class _HomePageState extends State<HomePage> {
                         ),
                         const SizedBox(width: 12),
                         Text(
-                          "BIVIUM",
+                          "app_name".tr(),
+
                           style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 20,
@@ -303,6 +310,7 @@ class _HomePageState extends State<HomePage> {
                   IconButton(
                     icon: Icon(
                       Icons.search,
+                      semanticLabel: "search".tr(),
                       color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
                     ),
                     onPressed: () {},
@@ -310,6 +318,7 @@ class _HomePageState extends State<HomePage> {
                   IconButton(
                     icon: Icon(
                       Icons.settings_outlined,
+                      semanticLabel: "settings".tr(),
                       color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
                     ),
                     onPressed: () async {
@@ -333,7 +342,8 @@ class _HomePageState extends State<HomePage> {
               child: Row(
                 children: [
                   Text(
-                    "PROJECTS",
+                    "projects".tr(),
+
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
@@ -344,7 +354,12 @@ class _HomePageState extends State<HomePage> {
                   const Spacer(),
                   IconButton(
                     onPressed: () => _showAddDialog(context),
-                    icon: const Icon(Icons.add, color: Colors.white),
+                    icon: Icon(
+                      Icons.add,
+                      color: Colors.white,
+                      semanticLabel: "add_project".tr(),
+                    ),
+
                     style: IconButton.styleFrom(
                       backgroundColor: AppColors.cSlate900,
                       padding: const EdgeInsets.all(8),
@@ -369,8 +384,9 @@ class _HomePageState extends State<HomePage> {
                                 : AppColors.cSlate300,
                           ),
                           const SizedBox(height: 16),
-                          const Text(
-                            "No projects yet",
+                          Text(
+                            "no_projects".tr(),
+
                             style: TextStyle(
                               color: AppColors.cSlate400,
                               fontSize: 16,
@@ -379,7 +395,7 @@ class _HomePageState extends State<HomePage> {
                           const SizedBox(height: 8),
                           TextButton(
                             onPressed: () => _showAddDialog(context),
-                            child: const Text("Create your first project"),
+                            child: Text("create_first".tr()),
                           ),
                         ],
                       ),
@@ -448,7 +464,8 @@ class _HomePageState extends State<HomePage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          "Last synced: ${s.lastSynced.month}/${s.lastSynced.day} ${s.lastSynced.hour}:${s.lastSynced.minute}",
+                          "${"last_synced".tr()}: ${s.lastSynced.month}/${s.lastSynced.day} ${s.lastSynced.hour}:${s.lastSynced.minute}",
+
                           style: TextStyle(
                             fontSize: 12,
                             color: isDark

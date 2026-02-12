@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+
 import 'package:http/http.dart' as http;
 import '../../core/theme.dart';
 import '../../models/flashcard.dart';
@@ -120,7 +122,8 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Please enter a title')));
+      ).showSnackBar(SnackBar(content: Text('title_required_error'.tr())));
+
       return;
     }
     widget.onConfirm(
@@ -155,7 +158,8 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
           color: isDark ? Colors.white : AppColors.cSlate800,
         ),
         title: Text(
-          'Configure Sheet',
+          'configure_sheet'.tr(),
+
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -171,7 +175,8 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
             TextField(
               controller: _titleController,
               decoration: InputDecoration(
-                labelText: 'Title',
+                labelText: 'title'.tr(),
+
                 labelStyle: TextStyle(
                   color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
                 ),
@@ -195,7 +200,8 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
-                  'No columns found',
+                  'no_columns_found'.tr(),
+
                   style: TextStyle(
                     color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
                   ),
@@ -203,7 +209,8 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
               )
             else ...[
               _buildColumnSelector(
-                'Key Column (optional)',
+                'key_col_label'.tr(),
+
                 _keyColIdx,
                 (idx) => setState(() => _keyColIdx = idx == -1 ? null : idx),
                 isDark,
@@ -211,21 +218,24 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
               ),
               const SizedBox(height: 16),
               _buildColumnSelector(
-                'Source Column',
+                'source_col_label'.tr(),
+
                 _sourceColIdx,
                 (idx) => setState(() => _sourceColIdx = idx),
                 isDark,
               ),
               const SizedBox(height: 16),
               _buildColumnSelector(
-                'Target Column',
+                'target_col_label'.tr(),
+
                 _targetColIdx,
                 (idx) => setState(() => _targetColIdx = idx),
                 isDark,
               ),
               const SizedBox(height: 16),
               _buildColumnSelector(
-                'Remark Column (optional)',
+                'remark_col_label'.tr(),
+
                 _remarkColIdx,
                 (idx) => setState(() => _remarkColIdx = idx == -1 ? null : idx),
                 isDark,
@@ -238,7 +248,7 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
               children: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                  child: Text('cancel'.tr()),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
@@ -246,7 +256,7 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.cBrand600,
                   ),
-                  child: const Text('Confirm'),
+                  child: Text('confirm'.tr()),
                 ),
               ],
             ),
@@ -294,7 +304,9 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
           dropdownColor: isDark ? AppColors.cDarkSurface : Colors.white,
           style: TextStyle(color: isDark ? Colors.white : AppColors.cSlate900),
           items: [
-            if (allowNone) DropdownMenuItem(value: -1, child: Text('None')),
+            if (allowNone)
+              DropdownMenuItem(value: -1, child: Text('none'.tr())),
+
             ...List.generate(_headers.length, (i) {
               return DropdownMenuItem(
                 value: i,

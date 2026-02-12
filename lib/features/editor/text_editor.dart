@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+
 import 'package:flutter/services.dart';
 import 'package:re_editor/re_editor.dart';
 import 'highlight_rules.dart';
@@ -40,15 +42,16 @@ class _TextEditorState extends State<TextEditor> {
     _toolbarController = MobileSelectionToolbarController(
       builder: (context, controller) {
         return [
-          ToolbarMenuItem(title: 'Copy', onTap: () => controller.copy()),
-          ToolbarMenuItem(title: 'Cut', onTap: () => controller.cut()),
-          ToolbarMenuItem(title: 'Paste', onTap: () => controller.paste()),
+          ToolbarMenuItem(title: 'copy'.tr(), onTap: () => controller.copy()),
+          ToolbarMenuItem(title: 'cut'.tr(), onTap: () => controller.cut()),
+          ToolbarMenuItem(title: 'paste'.tr(), onTap: () => controller.paste()),
           ToolbarMenuItem(
-            title: 'Select All',
+            title: 'select_all'.tr(),
             onTap: () => controller.selectAll(),
           ),
           ToolbarMenuItem(
-            title: 'Share',
+            title: 'share'.tr(),
+
             onTap: () {
               final selection = controller.selection;
               if (!selection.isCollapsed) {

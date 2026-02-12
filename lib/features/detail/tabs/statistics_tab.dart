@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/services/analysis_service.dart';
 import 'package:bivium/services/dictionary_service.dart';
@@ -74,7 +76,8 @@ class _StatisticsTabState extends State<StatisticsTab> {
         child: ElevatedButton.icon(
           onPressed: _handleAnalysis,
           icon: const Icon(Icons.bolt),
-          label: const Text("통계 분석 시작"),
+          label: Text("start_analysis".tr()),
+
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.cBrand600,
             foregroundColor: AppColors.cSlate900,
@@ -127,7 +130,12 @@ class _StatisticsTabState extends State<StatisticsTab> {
                     .map(
                       (w) => ListTile(
                         title: Text(w.original),
-                        subtitle: Text("카드 #${w.cardIndex + 1} 이동"),
+                        subtitle: Text(
+                          "jump_to_card".tr(
+                            namedArgs: {'index': (w.cardIndex + 1).toString()},
+                          ),
+                        ),
+
                         onTap: () => widget.onCardTap(w.cardIndex),
                       ),
                     )
@@ -148,7 +156,8 @@ class _StatisticsTabState extends State<StatisticsTab> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            "그룹: $count개",
+            "group_count".tr(namedArgs: {'count': count.toString()}),
+
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           IconButton(
@@ -165,7 +174,8 @@ class _StatisticsTabState extends State<StatisticsTab> {
       padding: const EdgeInsets.all(8.0),
       child: TextField(
         decoration: InputDecoration(
-          hintText: "검색...",
+          hintText: "search".tr(),
+
           prefixIcon: const Icon(Icons.search),
           filled: true,
           fillColor: isDark ? AppColors.cDarkSurface : AppColors.cSlate100,

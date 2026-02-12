@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+
 import '../../core/theme.dart';
 import '../../models/flashcard.dart';
 import '../../services/google_drive_service.dart';
@@ -100,7 +102,8 @@ class _AddSetDialogState extends State<AddSetDialog> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Add New Set',
+                    'add_new_set'.tr(),
+
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -113,7 +116,8 @@ class _AddSetDialogState extends State<AddSetDialog> {
             const SizedBox(height: 24),
             if (!_showSheetInput) ...[
               Text(
-                'Paste a Google Spreadsheet URL or pick a sheet from Drive.',
+                'add_set_desc'.tr(),
+
                 style: TextStyle(
                   fontSize: 14,
                   color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
@@ -125,7 +129,8 @@ class _AddSetDialogState extends State<AddSetDialog> {
                 child: FilledButton.icon(
                   onPressed: () => setState(() => _showSheetInput = true),
                   icon: const Icon(Icons.link, size: 20),
-                  label: const Text('Enter sheet URL'),
+                  label: Text('enter_sheet_url'.tr()),
+
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.cBrand600,
                     foregroundColor: Colors.white,
@@ -143,11 +148,7 @@ class _AddSetDialogState extends State<AddSetDialog> {
                   onPressed: widget.driveService == null
                       ? () {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Sign in with Google in Settings to use Drive list.',
-                              ),
-                            ),
+                            SnackBar(content: Text('sign_in_required'.tr())),
                           );
                         }
                       : () async {
@@ -165,7 +166,8 @@ class _AddSetDialogState extends State<AddSetDialog> {
                           Navigator.of(context).pop();
                         },
                   icon: const Icon(Icons.folder_open_outlined, size: 20),
-                  label: const Text('Pick from Drive'),
+                  label: Text('pick_from_drive'.tr()),
+
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.cBrand600,
                     side: const BorderSide(color: AppColors.cBrand600),

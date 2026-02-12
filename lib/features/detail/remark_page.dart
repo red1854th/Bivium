@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+
 import 'package:bivium/services/google_drive_service.dart';
 
 class RemarkPage extends StatefulWidget {
@@ -67,7 +69,7 @@ class _RemarkPageState extends State<RemarkPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('저장에 실패했습니다.')));
+        ).showSnackBar(SnackBar(content: Text('save_failed_msg'.tr())));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -86,13 +88,14 @@ class _RemarkPageState extends State<RemarkPage> {
         : Colors.blue.withValues(alpha: 0.3);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Remark Log')),
+      appBar: AppBar(title: Text('remark_log'.tr())),
+
       body: Column(
         children: [
           // 1. 리스트 영역
           Expanded(
             child: _remarkItems.isEmpty
-                ? const Center(child: Text('기록된 내용이 없습니다.'))
+                ? Center(child: Text('no_remarks_msg'.tr()))
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: _remarkItems.length,
@@ -140,7 +143,8 @@ class _RemarkPageState extends State<RemarkPage> {
                     controller: _inputController,
                     maxLines: null,
                     decoration: InputDecoration(
-                      hintText: '비고 내용을 입력하세요...',
+                      hintText: 'enter_remark'.tr(),
+
                       filled: true,
                       fillColor: isDark ? Colors.white10 : Colors.grey[100],
                       border: OutlineInputBorder(

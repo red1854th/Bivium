@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+
 import 'package:shared_preferences/shared_preferences.dart'; // 패키지 임포트
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/services/google_drive_service.dart';
@@ -188,28 +190,39 @@ class _CardEditorState extends State<CardEditor> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "에디터 설정",
+                  Text(
+                    "editor_settings".tr(),
+
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
-                  _buildSettingRow("글자 크기", _fontSize.toStringAsFixed(0), () {
-                    setModalState(
-                      () => _fontSize = (_fontSize >= 30) ? 14 : _fontSize + 2,
-                    );
-                    setState(() {});
-                  }),
-                  _buildSettingRow("줄 간격", _lineHeight.toStringAsFixed(1), () {
-                    setModalState(
-                      () => _lineHeight = (_lineHeight >= 2.0)
-                          ? 1.0
-                          : _lineHeight + 0.2,
-                    );
-                    setState(() {});
-                  }),
+                  _buildSettingRow(
+                    "font_size".tr(),
+                    _fontSize.toStringAsFixed(0),
+                    () {
+                      setModalState(
+                        () =>
+                            _fontSize = (_fontSize >= 30) ? 14 : _fontSize + 2,
+                      );
+                      setState(() {});
+                    },
+                  ),
+                  _buildSettingRow(
+                    "line_height".tr(),
+                    _lineHeight.toStringAsFixed(1),
+                    () {
+                      setModalState(
+                        () => _lineHeight = (_lineHeight >= 2.0)
+                            ? 1.0
+                            : _lineHeight + 0.2,
+                      );
+                      setState(() {});
+                    },
+                  ),
                   const SizedBox(height: 15),
-                  const Text(
-                    "폰트 선택",
+                  Text(
+                    "font_selection".tr(),
+
                     style: TextStyle(color: Colors.grey, fontSize: 13),
                   ),
                   const SizedBox(height: 10),

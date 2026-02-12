@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+
 import '../../core/theme.dart';
 import '../../models/flashcard.dart';
 import '../../services/google_drive_service.dart';
@@ -60,7 +62,7 @@ class _DriveSheetsListPageState extends State<DriveSheetsListPage> {
       _folderItems = items;
       _folderLoading = false;
       if (items.isEmpty && folderId == null) {
-        _folderError = '계정 연결 상태를 확인해 주세요.';
+        _folderError = 'check_connection_error'.tr();
       }
     });
   }
@@ -108,9 +110,10 @@ class _DriveSheetsListPageState extends State<DriveSheetsListPage> {
   String _formatModified(DateTime dt) {
     final now = DateTime.now();
     final diff = now.difference(dt);
-    if (diff.inDays == 0) return 'Today';
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    if (diff.inDays == 0) return 'today'.tr();
+    if (diff.inDays == 1) return 'yesterday'.tr();
+    if (diff.inDays < 7) return 'days_ago'.tr(args: [diff.inDays.toString()]);
+
     return '${dt.year}.${dt.month}.${dt.day}';
   }
 
@@ -130,8 +133,8 @@ class _DriveSheetsListPageState extends State<DriveSheetsListPage> {
         ),
         title: Text(
           _currentTabIndex == 0
-              ? (_folderStack.isEmpty ? 'Google Drive' : 'Folder')
-              : 'Recent Spreadsheets',
+              ? (_folderStack.isEmpty ? 'google_drive'.tr() : 'folder'.tr())
+              : 'recent_spreadsheets'.tr(),
         ),
       ),
       body: _currentTabIndex == 0
@@ -153,12 +156,15 @@ class _DriveSheetsListPageState extends State<DriveSheetsListPage> {
           _loadSpreadsheetList();
         }
       },
-      items: const [
+      items: [
         BottomNavigationBarItem(
-          icon: Icon(Icons.folder_outlined),
-          label: 'My Drive',
+          icon: const Icon(Icons.folder_outlined),
+          label: 'my_drive'.tr(),
         ),
-        BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'List'),
+        BottomNavigationBarItem(
+          icon: const Icon(Icons.list_alt),
+          label: 'spreadsheets'.tr(),
+        ),
       ],
     );
   }
@@ -202,7 +208,7 @@ class _DriveSheetsListPageState extends State<DriveSheetsListPage> {
 
   Widget _buildListBody(bool isDark) {
     if (_listLoading) return const Center(child: CircularProgressIndicator());
-    if (_listItems.isEmpty) return const Center(child: Text('파일이 없습니다.'));
+    if (_listItems.isEmpty) return Center(child: Text('no_files_found'.tr()));
 
     return ListView.builder(
       itemCount: _listItems.length,

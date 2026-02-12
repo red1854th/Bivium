@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+
 import '../../core/theme.dart';
 import '../../models/flashcard.dart';
 
@@ -52,10 +54,10 @@ class _EditProjectPageState extends State<EditProjectPage> {
 
     setState(() {
       if (newTitle.isEmpty) {
-        _titleErrorText = '제목은 비워둘 수 없습니다.';
+        _titleErrorText = 'title_empty_error'.tr();
       } else if (widget.allTitles.contains(newTitle) &&
           newTitle != widget.set.title) {
-        _titleErrorText = '이미 사용 중인 제목입니다.';
+        _titleErrorText = 'title_duplicate_error'.tr();
       } else {
         _titleErrorText = null;
       }
@@ -83,14 +85,16 @@ class _EditProjectPageState extends State<EditProjectPage> {
             borderRadius: BorderRadius.circular(16),
           ),
           title: Text(
-            '프로젝트 삭제',
+            'delete_project'.tr(),
+
             style: TextStyle(
               color: isDark ? Colors.white : Colors.black,
               fontWeight: FontWeight.bold,
             ),
           ),
           content: Text(
-            '정말로 "${widget.set.title}" 프로젝트를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.',
+            'delete_confirm_msg'.tr(namedArgs: {'title': widget.set.title}),
+
             style: TextStyle(
               color: isDark ? AppColors.cSlate300 : AppColors.cSlate700,
               height: 1.5,
@@ -104,7 +108,8 @@ class _EditProjectPageState extends State<EditProjectPage> {
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Text(
-                '취소',
+                'cancel'.tr(),
+
                 style: TextStyle(
                   color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
                   fontWeight: FontWeight.w600,
@@ -126,9 +131,9 @@ class _EditProjectPageState extends State<EditProjectPage> {
                 // 홈 화면(첫 번째 경로)까지 모든 스택을 제거하여 즉시 이동
                 Navigator.of(context).popUntil((route) => route.isFirst);
               },
-              child: const Text(
-                '삭제',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              child: Text(
+                'delete'.tr(),
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -153,10 +158,11 @@ class _EditProjectPageState extends State<EditProjectPage> {
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
-          '프로젝트 편집',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        title: Text(
+          'edit_project'.tr(),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
+
         actions: [
           IconButton(
             icon: Icon(
@@ -174,20 +180,24 @@ class _EditProjectPageState extends State<EditProjectPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildLabel('제목', isDark),
+            _buildLabel('title'.tr(), isDark),
+
             const SizedBox(height: 8),
             _buildTextField(
               _titleController,
-              '제목을 입력하세요',
+              'enter_title'.tr(),
+
               isDark,
               error: _titleErrorText,
             ),
             const SizedBox(height: 24),
-            _buildLabel('설명', isDark),
+            _buildLabel('description'.tr(), isDark),
+
             const SizedBox(height: 8),
             _buildTextField(
               _descriptionController,
-              '설명을 입력하세요',
+              'enter_description'.tr(),
+
               isDark,
               maxLines: 5,
             ),
@@ -204,9 +214,9 @@ class _EditProjectPageState extends State<EditProjectPage> {
                 ),
                 onPressed: () => _showDeleteConfirmationDialog(context),
                 icon: const Icon(Icons.delete_forever, color: Colors.white),
-                label: const Text(
-                  '프로젝트 삭제',
-                  style: TextStyle(
+                label: Text(
+                  'delete_project'.tr(),
+                  style: const TextStyle(
                     fontSize: 15,
                     color: Colors.white,
                     fontWeight: FontWeight.bold,

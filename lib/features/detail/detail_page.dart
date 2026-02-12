@@ -1,5 +1,7 @@
-import 'package:bivium/services/google_drive_service.dart';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:bivium/services/google_drive_service.dart';
+
 import '../../core/theme.dart';
 import '../../models/flashcard.dart';
 import 'tabs/items_tab.dart';
@@ -65,7 +67,8 @@ class _DetailPageState extends State<DetailPage> {
         });
       }
     } catch (e) {
-      debugPrint('데이터 로드 실패: $e');
+      debugPrint('${'data_load_failed'.tr()}: $e');
+
       if (mounted) setState(() => isLoading = false);
     }
   }
@@ -124,8 +127,9 @@ class _DetailPageState extends State<DetailPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'DESCRIPTION',
+                Text(
+                  'description_label'.tr(),
+
                   style: TextStyle(
                     color: AppColors.cBrand600,
                     fontSize: 11,
@@ -154,9 +158,9 @@ class _DetailPageState extends State<DetailPage> {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text(
-                      '닫기',
-                      style: TextStyle(color: AppColors.cBrand600),
+                    child: Text(
+                      'close'.tr(),
+                      style: const TextStyle(color: AppColors.cBrand600),
                     ),
                   ),
                 ),
@@ -257,8 +261,9 @@ class _DetailPageState extends State<DetailPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'DESCRIPTION',
+                            Text(
+                              'description_label'.tr(),
+
                               style: TextStyle(
                                 color: AppColors.cBrand600,
                                 fontSize: 10,
@@ -269,7 +274,7 @@ class _DetailPageState extends State<DetailPage> {
                             const SizedBox(height: 8),
                             Text(
                               widget.setInfo.description.isEmpty
-                                  ? '등록된 프로젝트 설명이 없습니다.'
+                                  ? 'no_description_msg'.tr()
                                   : widget.setInfo.description,
                               style: TextStyle(
                                 color: textColor,
@@ -356,18 +361,18 @@ class _DetailPageState extends State<DetailPage> {
         selectedItemColor: AppColors.cBrand600,
         unselectedItemColor: isDark ? Colors.white38 : Colors.black38,
         type: BottomNavigationBarType.fixed,
-        items: const [
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.list_alt_rounded),
-            label: 'Items',
+            icon: const Icon(Icons.list_alt_rounded),
+            label: 'items_tab'.tr(),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.analytics_outlined),
-            label: 'Stats',
+            icon: const Icon(Icons.analytics_outlined),
+            label: 'stats_tab'.tr(),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.auto_stories_outlined),
-            label: 'Glossary',
+            icon: const Icon(Icons.auto_stories_outlined),
+            label: 'glossary_tab'.tr(),
           ),
         ],
       ),

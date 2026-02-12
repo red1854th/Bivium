@@ -1,5 +1,5 @@
 name: bivium
-description: "A new Flutter project."
+description: "A Flutter-based LQA & Translation tool that streamlines translation audits with real-time Google Sheets synchronization. "
 publish_to: 'none'
 version: 1.0.0+1
 

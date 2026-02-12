@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+
 import '../../../core/theme.dart';
 import '../../../core/utils.dart';
 import '../../../models/flashcard.dart';
@@ -48,7 +50,8 @@ class _SheetInputWidgetState extends State<SheetInputWidget> {
     if (!mounted) return;
 
     // Use "New Project" as default title for link input
-    String sheetName = "New Project";
+    String sheetName = "new_project".tr();
+
     debugPrint('Opening selection dialog with sheetName: "$sheetName"');
 
     // Use callback instead of navigation
@@ -64,7 +67,8 @@ class _SheetInputWidgetState extends State<SheetInputWidget> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Google Sheets URL or ID',
+          'sheet_url_label'.tr(),
+
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
@@ -82,7 +86,8 @@ class _SheetInputWidgetState extends State<SheetInputWidget> {
         ),
         const SizedBox(height: 16),
         Text(
-          'Enter a Google Sheets URL to open the configuration screen.',
+          'sheet_input_help'.tr(),
+
           style: TextStyle(
             fontSize: 14,
             color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,

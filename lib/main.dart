@@ -3,12 +3,26 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // Add this import
 import 'features/home/home_page.dart';
 import 'core/theme.dart';
+import 'core/locales.dart';
+
+import 'package:easy_localization/easy_localization.dart';
 
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  await EasyLocalization.ensureInitialized();
+
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-  final SharedPreferences prefs = await SharedPreferences.getInstance(); // Initialize once
-  runApp(BiviumApp(prefs: prefs)); // Pass prefs to BiviumApp
+  final SharedPreferences prefs =
+      await SharedPreferences.getInstance(); // Initialize once
+
+  runApp(
+    EasyLocalization(
+      supportedLocales: AppLocale.locales, // 통합 관리되는 리스트 사용
+      path: 'assets/localization',
+      fallbackLocale: const Locale('en', 'US'),
+      child: BiviumApp(prefs: prefs),
+    ),
+  );
   FlutterNativeSplash.remove(); // Dismiss splash screen as soon as the app starts rendering
 }
 
@@ -50,10 +64,16 @@ class _BiviumAppState extends State<BiviumApp> {
     return MaterialApp(
       title: 'Bivium',
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: context.localizationDelegates,
+      supportedLocales: context.supportedLocales,
+      locale: context.locale,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: HomePage(onThemeChanged: _refreshTheme, prefs: _prefs), // Pass prefs to HomePage
+      home: HomePage(
+        onThemeChanged: _refreshTheme,
+        prefs: _prefs,
+      ), // Pass prefs to HomePage
     );
   }
 }
