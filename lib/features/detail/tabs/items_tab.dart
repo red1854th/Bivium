@@ -36,7 +36,6 @@ class _ItemsTabState extends State<ItemsTab> {
   final TextEditingController _searchController = TextEditingController();
 
   List<dynamic> _displayItems = [];
-  double _scrollOffset = 0.0;
   final double _itemExtent = 85.0;
   int _selectedDisplayIndex = 0;
 
@@ -48,7 +47,6 @@ class _ItemsTabState extends State<ItemsTab> {
     int initialIdx = _findDisplayIndex(widget.currentPageIndex);
     _selectedDisplayIndex = initialIdx;
     _wheelController = FixedExtentScrollController(initialItem: initialIdx);
-    _scrollOffset = initialIdx.toDouble();
 
     _wheelController.addListener(_scrollListener);
   }
@@ -63,9 +61,7 @@ class _ItemsTabState extends State<ItemsTab> {
 
   void _scrollListener() {
     if (_wheelController.hasClients) {
-      setState(() {
-        _scrollOffset = _wheelController.offset / _itemExtent;
-      });
+      setState(() {});
     }
   }
 
@@ -140,16 +136,6 @@ class _ItemsTabState extends State<ItemsTab> {
     }
   }
 
-  void _updateScrollPosition(Offset localPosition, double trackHeight) {
-    if (_displayItems.length <= 1) return;
-    final double percentage = (localPosition.dy / trackHeight).clamp(0.0, 1.0);
-    final int targetIndex = (percentage * (_displayItems.length - 1)).round();
-
-    if (_wheelController.hasClients) {
-      _wheelController.jumpToItem(targetIndex);
-    }
-  }
-
   @override
   void dispose() {
     _wheelController.removeListener(_scrollListener);
@@ -181,68 +167,114 @@ class _ItemsTabState extends State<ItemsTab> {
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
+                    if (_displayItems.isEmpty) {
+                      return Center(child: Text("no_search_results".tr()));
+                    }
+
+                    // 점프 및 드래그를 처리하는 공통 로직
+                    void handleScroll(double localY) {
+                      if (_wheelController.hasClients &&
+                          _wheelController.position.hasContentDimensions) {
+                        final double trackHeight = constraints.maxHeight - 8;
+                        final double adjustedY = (localY - 4).clamp(
+                          0.0,
+                          trackHeight,
+                        );
+                        final double scrollPercent = adjustedY / trackHeight;
+                        final double targetOffset =
+                            scrollPercent *
+                            _wheelController.position.maxScrollExtent;
+
+                        _wheelController.position.jumpTo(targetOffset);
+                      }
+                    }
+
                     return Stack(
                       children: [
-                        _displayItems.isEmpty
-                            ? Center(child: Text("no_search_results".tr()))
-                            : ListWheelScrollView.useDelegate(
-                                controller: _wheelController,
-                                itemExtent: _itemExtent,
-                                physics: const FixedExtentScrollPhysics(),
-                                diameterRatio: 1000,
-                                perspective: 0.000001,
-                                overAndUnderCenterOpacity: 1.0,
-                                onSelectedItemChanged: (index) {
-                                  setState(() => _selectedDisplayIndex = index);
-                                  HapticFeedback.selectionClick();
-                                },
-                                childDelegate: ListWheelChildBuilderDelegate(
-                                  childCount: _displayItems.length,
-                                  builder: (context, index) {
-                                    final item = _displayItems[index];
-
-                                    if (item is Map &&
-                                        item['type'] == 'group_header') {
-                                      return _buildFolderHeader(
-                                        item['parent'],
-                                        index,
-                                        isDark,
-                                      );
-                                    }
-
-                                    final Flashcard card = item as Flashcard;
-                                    final int originalIndex = widget.cards
-                                        .indexOf(card);
-                                    return _buildCardItem(
-                                      card,
-                                      originalIndex,
+                        // 1. 리스트 뷰 및 순정 스크롤바
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: RawScrollbar(
+                            controller: _wheelController,
+                            minThumbLength: 40.0,
+                            mainAxisMargin: 4.0,
+                            thumbColor: AppColors.cBrand600.withValues(
+                              alpha: 0.8,
+                            ),
+                            thickness: 8,
+                            radius: const Radius.circular(10),
+                            thumbVisibility: true,
+                            interactive: true,
+                            pressDuration: Duration.zero,
+                            child: ListWheelScrollView.useDelegate(
+                              controller: _wheelController,
+                              itemExtent: _itemExtent,
+                              physics: const FixedExtentScrollPhysics(),
+                              diameterRatio: 1000,
+                              perspective: 0.000001,
+                              overAndUnderCenterOpacity: 1.0,
+                              onSelectedItemChanged: (index) {
+                                setState(() => _selectedDisplayIndex = index);
+                                HapticFeedback.selectionClick();
+                              },
+                              childDelegate: ListWheelChildBuilderDelegate(
+                                childCount: _displayItems.length,
+                                builder: (context, index) {
+                                  final item = _displayItems[index];
+                                  if (item is Map &&
+                                      item['type'] == 'group_header') {
+                                    return _buildFolderHeader(
+                                      item['parent'],
                                       index,
                                       isDark,
                                     );
-                                  },
-                                ),
-                              ),
-                        if (_displayItems.length > 1)
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onVerticalDragDown: (details) =>
-                                  _updateScrollPosition(
-                                    details.localPosition,
-                                    constraints.maxHeight,
-                                  ),
-                              onVerticalDragUpdate: (details) =>
-                                  _updateScrollPosition(
-                                    details.localPosition,
-                                    constraints.maxHeight,
-                                  ),
-                              child: _buildCurveIndicator(
-                                isDark,
-                                constraints.maxHeight,
+                                  }
+                                  final Flashcard card = item as Flashcard;
+                                  return _buildCardItem(
+                                    card,
+                                    widget.cards.indexOf(card),
+                                    index,
+                                    isDark,
+                                  );
+                                },
                               ),
                             ),
                           ),
+                        ),
+
+                        // 2. 통합 터치 레이어 (Jump + Drag 유지)
+                        Positioned(
+                          top: 0,
+                          bottom: 0,
+                          right: 0,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            // 터치 즉시 점프
+                            onTapDown: (details) {
+                              handleScroll(details.localPosition.dy);
+                              HapticFeedback.lightImpact();
+                            },
+                            // 점프 후 손가락을 떼지 않고 움직일 때 (드래그) 처리
+                            onVerticalDragUpdate: (details) {
+                              handleScroll(details.localPosition.dy);
+                            },
+                            child: Container(
+                              width: 30, // 터치 인식 범위
+                              alignment: Alignment.centerRight,
+                              color: Colors.transparent,
+                              child: Container(
+                                width: 6,
+                                margin: const EdgeInsets.only(right: 7),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? Colors.white10
+                                      : Colors.black12,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     );
                   },
@@ -658,24 +690,6 @@ class _ItemsTabState extends State<ItemsTab> {
           ),
           contentPadding: EdgeInsets.zero,
         ),
-      ),
-    );
-  }
-
-  Widget _buildCurveIndicator(bool isDark, double trackHeight) {
-    if (_displayItems.isEmpty) return const SizedBox.shrink();
-    final double progress = _displayItems.length > 1
-        ? (_scrollOffset / (_displayItems.length - 1)).clamp(0.0, 1.0)
-        : 0.0;
-    return CustomPaint(
-      size: Size(40, trackHeight),
-      painter: HighlightTrackPainter(
-        progress: progress,
-        angleRange: math.pi / 2.2,
-        radius: trackHeight * 0.25,
-        yRange: trackHeight / 1.8,
-        baseColor: isDark ? Colors.white10 : Colors.black12,
-        highlightColor: AppColors.cBrand600,
       ),
     );
   }
