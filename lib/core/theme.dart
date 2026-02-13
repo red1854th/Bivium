@@ -15,6 +15,7 @@ class AppColors {
 
   static const cBrand50 = Color(0xFFE8FBE9);
   static const cBrand100 = Color(0xFFC4F4C7);
+  static const cBrand200 = Color(0xFFA5EBAA);
   static const cBrand600 = Color(0xFF5AE361);
   static const cBrand700 = Color(0xFF4BC952);
 
@@ -41,11 +42,13 @@ class AppColors {
 class ThemeService {
   static const _themeKey = 'theme_mode';
 
-  static bool isDarkMode(SharedPreferences prefs) { // No longer async, accepts prefs
+  static bool isDarkMode(SharedPreferences prefs) {
+    // No longer async, accepts prefs
     return prefs.getBool(_themeKey) ?? false;
   }
 
-  static Future<void> setDarkMode(SharedPreferences prefs, bool isDark) async { // Accepts prefs
+  static Future<void> setDarkMode(SharedPreferences prefs, bool isDark) async {
+    // Accepts prefs
     await prefs.setBool(_themeKey, isDark);
   }
 

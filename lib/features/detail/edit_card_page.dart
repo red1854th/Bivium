@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
-
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:bivium/models/flashcard.dart';
@@ -42,6 +41,13 @@ class _EditCardPageState extends State<EditCardPage> {
     _pageController = PageController(initialPage: _currentPageIndex);
   }
 
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  /// 데이터 변경 사항을 구글 드라이브(시트)에 저장
   void _saveChanges(int index) {
     if (index < 0 || index >= widget.cards.length) return;
     final card = widget.cards[index];
@@ -55,20 +61,26 @@ class _EditCardPageState extends State<EditCardPage> {
         .catchError((e) => debugPrint('${'background_save_failed'.tr()}: $e'));
   }
 
+  /// 이전 화면(DetailPage)으로 돌아갈 때 데이터와 인덱스를 전달
   void _handlePop() {
-    FocusManager.instance.primaryFocus?.unfocus();
+    // 키보드 포커스 해제 (먹통 방지 핵심)
+    FocusScope.of(context).unfocus();
+
+    // 현재 페이지 변경사항 저장
     _saveChanges(_currentPageIndex);
+
     if (mounted) {
+      // DetailPage의 Navigator.push가 기다리는 결과값(result) 반환
       Navigator.of(
         context,
       ).pop({'cards': widget.cards, 'lastIndex': _currentPageIndex});
     }
   }
 
-  void _showCardJumpDialog() {
+  void _showCardJumpDialog() async {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    showDialog(
+    final bool? hasChanges = await showDialog<bool>(
       context: context,
       barrierColor: isDark ? Colors.white10 : Colors.black45,
       builder: (context) {
@@ -78,15 +90,16 @@ class _EditCardPageState extends State<EditCardPage> {
           onCardSelected: (index) {
             _pageController.jumpToPage(index);
           },
+          setInfo: widget.setInfo,
+          driveService: widget.driveService,
         );
       },
     );
-  }
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
+    // 다이얼로그에서 폴더 접기/펼치기 변경이 있었다면 UI 갱신
+    if (hasChanges == true && mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -94,8 +107,8 @@ class _EditCardPageState extends State<EditCardPage> {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
     return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
+      canPop: false, // 시스템 뒤로가기를 수동으로 제어
+      onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         _handlePop();
       },
@@ -156,7 +169,7 @@ class _EditCardPageState extends State<EditCardPage> {
                 scrollDirection: _scrollDirection,
                 itemCount: widget.cards.length,
                 onPageChanged: (idx) {
-                  _saveChanges(_currentPageIndex);
+                  _saveChanges(_currentPageIndex); // 이전 페이지 저장
                   if (mounted) setState(() => _currentPageIndex = idx);
                 },
                 itemBuilder: (context, index) {

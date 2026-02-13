@@ -1,21 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
-
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/core/theme.dart';
+import 'package:bivium/services/google_drive_service.dart';
 
 class CardJumpDialog extends StatefulWidget {
   final List<Flashcard> cards;
   final int currentPageIndex;
   final Function(int) onCardSelected;
+  final dynamic setInfo;
+  final GoogleDriveService? driveService;
 
   const CardJumpDialog({
     super.key,
     required this.cards,
     required this.currentPageIndex,
     required this.onCardSelected,
+    required this.setInfo,
+    required this.driveService,
   });
 
   @override
@@ -26,23 +30,20 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
   late FixedExtentScrollController _wheelController;
   final TextEditingController _searchController = TextEditingController();
 
-  List<int> _filteredIndices = [];
+  List<dynamic> _displayItems = [];
   double _scrollOffset = 0.0;
   final double _itemExtent = 85.0;
+  int _selectedDisplayIndex = 0;
+  bool _hasChanges = false; // 폴더 접기/펼치기 변경사항 추적
 
   @override
   void initState() {
     super.initState();
-    // 1. 검색용 인덱스 리스트 초기화
-    _filteredIndices = List.generate(widget.cards.length, (index) => index);
+    _updateDisplayItems();
 
-    // 2. 컨트롤러 설정 (보고 있던 카드로 시작)
-    _wheelController = FixedExtentScrollController(
-      initialItem: widget.currentPageIndex,
-    );
-
-    // 3. [복구] 초기 스크롤 바 위치가 맨 위로 튀지 않도록 현재 위치 저장
-    _scrollOffset = widget.currentPageIndex.toDouble();
+    int initialIdx = _findDisplayIndex(widget.currentPageIndex);
+    _wheelController = FixedExtentScrollController(initialItem: initialIdx);
+    _scrollOffset = initialIdx.toDouble();
 
     _wheelController.addListener(_scrollListener);
   }
@@ -55,36 +56,84 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
     }
   }
 
+  int _findDisplayIndex(int originalIdx) {
+    for (int i = 0; i < _displayItems.length; i++) {
+      final item = _displayItems[i];
+      if (item is Flashcard && widget.cards.indexOf(item) == originalIdx) {
+        return i;
+      }
+    }
+    return 0;
+  }
+
+  bool _checkHasChildren(int index) {
+    if (index >= widget.cards.length - 1) return false;
+    return widget.cards[index + 1].groupDepth > widget.cards[index].groupDepth;
+  }
+
+  void _updateDisplayItems() {
+    final query = _searchController.text.toLowerCase();
+    List<dynamic> result = [];
+
+    if (query.isNotEmpty) {
+      for (int i = 0; i < widget.cards.length; i++) {
+        final card = widget.cards[i];
+        if (card.front.toLowerCase().contains(query) ||
+            card.back.toLowerCase().contains(query) ||
+            card.key.toLowerCase().contains(query)) {
+          result.add(card);
+        }
+      }
+    } else {
+      bool skippingMode = false;
+      int skipDepth = 0;
+
+      for (int i = 0; i < widget.cards.length; i++) {
+        final card = widget.cards[i];
+
+        if (skippingMode) {
+          if (card.groupDepth > skipDepth) continue;
+          skippingMode = false;
+        }
+
+        if (_checkHasChildren(i)) {
+          result.add({
+            'type': 'group_header',
+            'parent': card,
+            'originalIndex': i,
+          });
+        }
+
+        bool isParent = _checkHasChildren(i);
+        if (!isParent || (isParent && !card.isCollapsed)) {
+          result.add(card);
+        }
+
+        if (isParent && card.isCollapsed) {
+          skippingMode = true;
+          skipDepth = card.groupDepth;
+        }
+      }
+    }
+
+    setState(() => _displayItems = result);
+  }
+
+  void _onSearchChanged(String query) {
+    _updateDisplayItems();
+    if (_wheelController.hasClients && _displayItems.isNotEmpty) {
+      _wheelController.jumpToItem(0);
+    }
+  }
+
   void _updateScrollPosition(Offset localPosition, double trackHeight) {
-    if (_filteredIndices.length <= 1) return;
+    if (_displayItems.length <= 1) return;
     final double percentage = (localPosition.dy / trackHeight).clamp(0.0, 1.0);
-    final int targetIndex = (percentage * (_filteredIndices.length - 1))
-        .round();
+    final int targetIndex = (percentage * (_displayItems.length - 1)).round();
 
     if (_wheelController.hasClients) {
       _wheelController.jumpToItem(targetIndex);
     }
-  }
-
-  void _onSearchChanged(String query) {
-    setState(() {
-      final q = query.toLowerCase();
-      _filteredIndices = widget.cards
-          .asMap()
-          .entries
-          .where((entry) {
-            final card = entry.value;
-            return card.front.toLowerCase().contains(q) ||
-                card.back.toLowerCase().contains(q) ||
-                card.key.toLowerCase().contains(q);
-          })
-          .map((entry) => entry.key)
-          .toList();
-
-      if (_wheelController.hasClients && _filteredIndices.isNotEmpty) {
-        _wheelController.jumpToItem(0);
-      }
-    });
   }
 
   @override
@@ -108,8 +157,8 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
           height: size.height * 0.65,
           decoration: BoxDecoration(
             color: isDark
-                ? AppColors.cDarkSurface.withValues(alpha: 0.5)
-                : Colors.white.withValues(alpha: 0.5),
+                ? AppColors.cDarkSurface.withValues(alpha: 0.8)
+                : Colors.white.withValues(alpha: 0.9),
             borderRadius: BorderRadius.circular(24),
           ),
           child: Column(
@@ -120,26 +169,44 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
                   builder: (context, constraints) {
                     return Stack(
                       children: [
-                        _filteredIndices.isEmpty
+                        _displayItems.isEmpty
                             ? Center(child: Text("no_search_results".tr()))
                             : ListWheelScrollView.useDelegate(
                                 controller: _wheelController,
                                 itemExtent: _itemExtent,
                                 physics: const FixedExtentScrollPhysics(),
                                 diameterRatio: 2.5,
-                                onSelectedItemChanged: (_) =>
-                                    HapticFeedback.selectionClick(),
+                                onSelectedItemChanged: (index) {
+                                  setState(() => _selectedDisplayIndex = index);
+                                  HapticFeedback.selectionClick();
+                                },
                                 childDelegate: ListWheelChildBuilderDelegate(
-                                  childCount: _filteredIndices.length,
-                                  builder: (context, index) => _buildCardItem(
-                                    widget.cards[_filteredIndices[index]],
-                                    _filteredIndices[index],
-                                    index,
-                                    isDark,
-                                  ),
+                                  childCount: _displayItems.length,
+                                  builder: (context, index) {
+                                    final item = _displayItems[index];
+
+                                    if (item is Map &&
+                                        item['type'] == 'group_header') {
+                                      return _buildFolderHeader(
+                                        item['parent'],
+                                        index,
+                                        isDark,
+                                      );
+                                    }
+
+                                    final Flashcard card = item as Flashcard;
+                                    final int originalIndex = widget.cards
+                                        .indexOf(card);
+                                    return _buildCardItem(
+                                      card,
+                                      originalIndex,
+                                      index,
+                                      isDark,
+                                    );
+                                  },
                                 ),
                               ),
-                        if (_filteredIndices.length > 1)
+                        if (_displayItems.length > 1)
                           Align(
                             alignment: Alignment.centerRight,
                             child: GestureDetector(
@@ -173,23 +240,363 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
     );
   }
 
-  Widget _buildCurveIndicator(bool isDark, double trackHeight) {
-    if (_filteredIndices.isEmpty) return const SizedBox.shrink();
+  Widget _buildFolderHeader(Flashcard parent, int index, bool isDark) {
+    final int depth = parent.groupDepth;
+    final bool isSelected = _selectedDisplayIndex == index;
 
-    final int totalItems = _filteredIndices.length;
-    final double progress = totalItems > 1
-        ? (_scrollOffset / (totalItems - 1)).clamp(0.0, 1.0)
-        : 0.0;
+    return AnimatedBuilder(
+      animation: _wheelController,
+      builder: (context, child) {
+        // 현재 선택된 아이템과의 거리에 따른 변형 효과 계산
+        double offset = _wheelController.hasClients
+            ? (_wheelController.selectedItem - index).abs().toDouble()
+            : 0.0;
 
-    return CustomPaint(
-      size: Size(50, trackHeight),
-      painter: HighlightTrackPainter(
-        progress: progress,
-        angleRange: math.pi / 2,
-        radius: trackHeight * 0.2,
-        yRange: trackHeight / 1.7,
-        baseColor: isDark ? Colors.white10 : Colors.black12,
-        highlightColor: AppColors.cBrand600,
+        return Transform.scale(
+          scale: math.max(0.85, 1.0 - (offset * 0.05)),
+          child: Opacity(
+            opacity: math.max(0.4, 1.0 - (offset * 0.2)),
+            child: child,
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        child: Row(
+          children: [
+            // 계층 구조 시각화를 위한 ↳ 기호 영역
+            for (int i = 0; i < depth; i++)
+              const SizedBox(
+                width: 16,
+                child: Center(
+                  child: Text(
+                    '↳',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            // 메인 폴더 헤더 디자인
+            Expanded(
+              child: Material(
+                color: (parent.isFlagged
+                    ? (isDark
+                          ? const Color(0xFF4D4000)
+                          : const Color(0xFFFFF9C4))
+                    : (isDark ? AppColors.cSlate900 : AppColors.cSlate50)),
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  onTap: () async {
+                    // 로컬 UI 업데이트
+                    setState(() {
+                      parent.isCollapsed = !parent.isCollapsed;
+                      _updateDisplayItems();
+                      _hasChanges = true; // 변경사항 기록
+                    });
+
+                    if (widget.driveService != null) {
+                      // [중요] depth와 range가 모두 유효한지 최종 검증
+                      bool isValidGroupRange =
+                          (parent.groupEndIndex - parent.groupStartIndex) > 1;
+
+                      if (isValidGroupRange) {
+                        try {
+                          await widget.driveService!.updateRowGroupExpansion(
+                            spreadsheetId: widget.setInfo.sheetId,
+                            sheetId: widget.setInfo.gid,
+                            collapse: parent.isCollapsed,
+                            startIndex: parent.groupStartIndex,
+                            endIndex: parent.groupEndIndex,
+                            depth: parent.controlGroupDepth,
+                          );
+                        } catch (e) {
+                          debugPrint('동기화 실패: $e');
+                        }
+                      } else {
+                        debugPrint(
+                          'Warning: 잘못된 그룹 범위 전송 시도 - ${parent.groupStartIndex}:${parent.groupEndIndex}',
+                        );
+                      }
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    height: 82.0,
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: isSelected
+                            ? AppColors.cBrand600
+                            : (isDark
+                                  ? AppColors.cDarkBorder
+                                  : AppColors.cSlate300),
+                        width: isSelected ? 2.0 : 1.5,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          parent.isCollapsed
+                              ? Icons.folder_rounded
+                              : Icons.folder_open_rounded,
+                          color: AppColors.cBrand600,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                parent.key,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                  fontFamily: 'monospace',
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      parent.front.replaceAll('\n', ' '),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    child: Text(
+                                      '|',
+                                      style: TextStyle(color: Colors.grey),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      parent.back.replaceAll('\n', ' '),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: isDark
+                                            ? AppColors.cSlate400
+                                            : AppColors.cSlate600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          parent.isCollapsed
+                              ? Icons.chevron_right_rounded
+                              : Icons.expand_more_rounded,
+                          color: Colors.grey,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardItem(
+    Flashcard card,
+    int originalIndex,
+    int index,
+    bool isDark,
+  ) {
+    final int depth = card.groupDepth;
+    final bool isParent = _checkHasChildren(originalIndex);
+    final bool isSelected = _selectedDisplayIndex == index;
+
+    return AnimatedBuilder(
+      animation: _wheelController,
+      builder: (context, child) {
+        double offset = _wheelController.hasClients
+            ? (_wheelController.selectedItem - index).abs().toDouble()
+            : 0.0;
+
+        return Transform.scale(
+          scale: math.max(0.85, 1.0 - (offset * 0.05)),
+          child: Opacity(
+            opacity: math.max(0.4, 1.0 - (offset * 0.2)),
+            child: child,
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        child: Row(
+          children: [
+            // 계층 구조 시각화를 위한 ↳ 기호 영역 (카드용)
+            for (int i = 0; i < (isParent ? depth : depth); i++)
+              const SizedBox(
+                width: 16,
+                child: Center(
+                  child: Text(
+                    '↳',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            // 부모 카드일 경우 추가 들여쓰기 공간에도 ↳ 기호 적용
+            if (isParent)
+              const SizedBox(
+                width: 16,
+                child: Center(
+                  child: Text(
+                    '↳',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.pop(context, _hasChanges); // 변경사항 여부 반환
+                  widget.onCardSelected(originalIndex);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: (card.isFlagged
+                        ? (isDark
+                              ? const Color(0xFF4D4000)
+                              : const Color(0xFFFFF9C4))
+                        : (isDark ? AppColors.cSlate900 : AppColors.cSlate50)),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.cBrand600
+                          : (isDark
+                                ? AppColors.cDarkBorder
+                                : AppColors.cSlate300),
+                      width: isSelected ? 2.0 : 1.0,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        height: 20,
+                        child: Row(
+                          children: [
+                            Text(
+                              '#${originalIndex + 1}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.cBrand600,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                card.key,
+                                style: const TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.grey,
+                                  fontFamily: 'monospace',
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (card.remark.isNotEmpty)
+                              const Icon(
+                                Icons.history_edu_rounded,
+                                size: 18,
+                                color: AppColors.cBrand600,
+                              ),
+                            if (card.isFlagged)
+                              const Icon(
+                                Icons.flag,
+                                size: 18,
+                                color: Colors.orange,
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              card.front.replaceAll('\n', ' '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 6),
+                            child: Text(
+                              '|',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              card.back.replaceAll('\n', ' '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark
+                                    ? AppColors.cSlate400
+                                    : AppColors.cSlate600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -202,7 +609,6 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
         onChanged: _onSearchChanged,
         decoration: InputDecoration(
           hintText: "search".tr(),
-
           prefixIcon: const Icon(Icons.search, size: 20),
           filled: true,
           fillColor: isDark ? AppColors.cSlate800 : AppColors.cSlate100,
@@ -216,135 +622,20 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
     );
   }
 
-  Widget _buildCardItem(
-    Flashcard card,
-    int originalIndex,
-    int index,
-    bool isDark,
-  ) {
-    return AnimatedBuilder(
-      animation: _wheelController,
-      builder: (context, child) {
-        double offset = _wheelController.hasClients
-            ? (_wheelController.selectedItem - index).abs().toDouble()
-            : (widget.currentPageIndex - index).abs().toDouble();
-
-        return Transform.scale(
-          scale: math.max(0.85, 1.0 - (offset * 0.05)),
-          child: Opacity(
-            opacity: math.max(0.4, 1.0 - (offset * 0.2)),
-            child: child,
-          ),
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: GestureDetector(
-          onTap: () {
-            Navigator.pop(context);
-            widget.onCardSelected(originalIndex);
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: card.isFlagged
-                  ? (isDark ? const Color(0xFF4D4000) : const Color(0xFFFFF9C4))
-                  : (isDark ? AppColors.cSlate900 : AppColors.cSlate50),
-              border: Border.all(
-                color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // 첫 번째 줄: 인덱스, 키, 그리고 비고/플래그 버튼
-                SizedBox(
-                  height: 28,
-                  child: Row(
-                    children: [
-                      Text(
-                        '#${originalIndex + 1}',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.cBrand600,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          card.key.isEmpty ? "" : card.key,
-                          style: const TextStyle(
-                            fontSize: 9,
-                            color: Colors.grey,
-                            fontFamily: 'monospace',
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      // 비고 아이콘 (단순 표시용)
-                      Icon(
-                        Icons.history_edu_rounded,
-                        size: 14,
-                        color: card.remark.isNotEmpty
-                            ? AppColors.cBrand600
-                            : Colors.grey.withValues(alpha: 0.5),
-                      ),
-                      const SizedBox(width: 6),
-                      // 플래그 아이콘 (상태 표시)
-                      Icon(
-                        card.isFlagged ? Icons.flag : Icons.flag_outlined,
-                        size: 14,
-                        color: card.isFlagged
-                            ? Colors.orange
-                            : Colors.grey.withValues(alpha: 0.5),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                // 두 번째 줄: 앞면 | 뒷면
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        card.front.replaceAll('\n', ' '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text(
-                        '|',
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        card.back.replaceAll('\n', ' '),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDark
-                              ? AppColors.cSlate400
-                              : AppColors.cSlate600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+  Widget _buildCurveIndicator(bool isDark, double trackHeight) {
+    if (_displayItems.isEmpty) return const SizedBox.shrink();
+    final double progress = _displayItems.length > 1
+        ? (_scrollOffset / (_displayItems.length - 1)).clamp(0.0, 1.0)
+        : 0.0;
+    return CustomPaint(
+      size: Size(40, trackHeight),
+      painter: HighlightTrackPainter(
+        progress: progress,
+        angleRange: math.pi / 2.2,
+        radius: trackHeight * 0.25,
+        yRange: trackHeight / 1.8,
+        baseColor: isDark ? Colors.white10 : Colors.black12,
+        highlightColor: AppColors.cBrand600,
       ),
     );
   }
@@ -386,7 +677,7 @@ class HighlightTrackPainter extends CustomPainter {
       path,
       paint
         ..color = baseColor
-        ..strokeWidth = 5.0,
+        ..strokeWidth = 4.0,
     );
 
     final Path highlight = Path();
@@ -404,7 +695,7 @@ class HighlightTrackPainter extends CustomPainter {
       highlight,
       paint
         ..color = highlightColor
-        ..strokeWidth = 7.0,
+        ..strokeWidth = 6.0,
     );
   }
 

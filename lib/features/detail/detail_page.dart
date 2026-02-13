@@ -8,6 +8,7 @@ import 'tabs/items_tab.dart';
 import 'tabs/statistics_tab.dart';
 import 'tabs/glossary_tab.dart';
 import 'package:bivium/features/home/edit_project_page.dart';
+import 'package:bivium/features/detail/edit_card_page.dart';
 
 class DetailPage extends StatefulWidget {
   final FlashcardSet setInfo;
@@ -33,7 +34,8 @@ class _DetailPageState extends State<DetailPage> {
   List<Flashcard> cards = [];
   bool isLoading = true;
   bool isExpanded = false;
-  int _currentIndex = 0;
+  int _currentIndex = 0; // 하단 탭 인덱스
+  int _currentCardPageIndex = 0; // 현재 선택된 카드 인덱스
 
   final PageController _pageController = PageController();
   final ScrollController _itemsScrollController = ScrollController();
@@ -68,7 +70,6 @@ class _DetailPageState extends State<DetailPage> {
       }
     } catch (e) {
       debugPrint('${'data_load_failed'.tr()}: $e');
-
       if (mounted) setState(() => isLoading = false);
     }
   }
@@ -129,8 +130,7 @@ class _DetailPageState extends State<DetailPage> {
               children: [
                 Text(
                   'description_label'.tr(),
-
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppColors.cBrand600,
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
@@ -263,8 +263,7 @@ class _DetailPageState extends State<DetailPage> {
                           children: [
                             Text(
                               'description_label'.tr(),
-
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: AppColors.cBrand600,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
@@ -308,7 +307,6 @@ class _DetailPageState extends State<DetailPage> {
                                     widget.setInfo.title = newTitle;
                                     widget.setInfo.description = newDescription;
                                   });
-                                  // 부모(Home)의 SharedPreferences 저장 로직 실행
                                   widget.onUpdate();
                                 },
                                 onDelete: widget.onDelete,
@@ -337,11 +335,40 @@ class _DetailPageState extends State<DetailPage> {
                     children: [
                       ItemsTab(
                         cards: cards,
+                        currentPageIndex: _currentCardPageIndex,
+                        onCardSelected: (index) async {
+                          // [주의] ItemsTab 내부에서 Navigator.pop이 불리는지 확인 필요
+                          // 포커스 해제로 키보드 닫기
+                          FocusScope.of(context).unfocus();
+
+                          final result = await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => EditCardPage(
+                                cards: cards,
+                                initialCardIndex: index,
+                                setInfo: widget.setInfo,
+                                driveService: widget.driveService,
+                              ),
+                            ),
+                          );
+
+                          if (result != null && result is Map && mounted) {
+                            setState(() {
+                              if (result['cards'] != null) {
+                                cards = List<Flashcard>.from(result['cards']);
+                              }
+                              if (result['lastIndex'] != null) {
+                                _currentCardPageIndex = result['lastIndex'];
+                              }
+                            });
+                          }
+                        },
                         setInfo: widget.setInfo,
                         driveService: widget.driveService,
                         scrollController: _itemsScrollController,
-                        onRefresh: (updatedList) =>
-                            _updateLocalCards(updatedList),
+                        onRefresh: (updatedList) async {
+                          _updateLocalCards(updatedList);
+                        },
                       ),
                       StatisticsTab(
                         cards: cards,

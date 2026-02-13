@@ -87,97 +87,104 @@ class _RemarkPageState extends State<RemarkPage> {
         ? Colors.blue.withValues(alpha: 0.4)
         : Colors.blue.withValues(alpha: 0.3);
 
-    return Scaffold(
-      appBar: AppBar(title: Text('remark_log'.tr())),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pop(context, _remarkItems.join('\n\n'));
+      },
+      child: Scaffold(
+        appBar: AppBar(title: Text('remark_log'.tr())),
 
-      body: Column(
-        children: [
-          // 1. 리스트 영역
-          Expanded(
-            child: _remarkItems.isEmpty
-                ? Center(child: Text('no_remarks_msg'.tr()))
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _remarkItems.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) => Container(
+        body: Column(
+          children: [
+            // 1. 리스트 영역
+            Expanded(
+              child: _remarkItems.isEmpty
+                  ? Center(child: Text('no_remarks_msg'.tr()))
+                  : ListView.separated(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: cardBgColor,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: borderColor, width: 1.5),
-                      ),
-                      child: Text(
-                        _remarkItems[index],
-                        style: const TextStyle(
-                          fontSize: 15,
-                          height: 1.4,
-                          fontWeight: FontWeight.w500,
+                      itemCount: _remarkItems.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) => Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: cardBgColor,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: borderColor, width: 1.5),
                         ),
-                      ),
-                    ),
-                  ),
-          ),
-          // 2. 입력 영역 (기존 박스 형태 복구)
-          Container(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              12,
-              16,
-              MediaQuery.of(context).padding.bottom + 12,
-            ),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -5),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _inputController,
-                    maxLines: null,
-                    decoration: InputDecoration(
-                      hintText: 'enter_remark'.tr(),
-
-                      filled: true,
-                      fillColor: isDark ? Colors.white10 : Colors.grey[100],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(25),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _isSaving
-                    ? const SizedBox(
-                        width: 48,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : CircleAvatar(
-                        backgroundColor: Colors.blue,
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.arrow_upward,
-                            color: Colors.white,
+                        child: Text(
+                          _remarkItems[index],
+                          style: const TextStyle(
+                            fontSize: 15,
+                            height: 1.4,
+                            fontWeight: FontWeight.w500,
                           ),
-                          onPressed: _addRemark,
                         ),
                       ),
-              ],
+                    ),
             ),
-          ),
-        ],
+            // 2. 입력 영역 (기존 박스 형태 복구)
+            Container(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                12,
+                16,
+                MediaQuery.of(context).padding.bottom + 12,
+              ),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _inputController,
+                      maxLines: null,
+                      decoration: InputDecoration(
+                        hintText: 'enter_remark'.tr(),
+
+                        filled: true,
+                        fillColor: isDark ? Colors.white10 : Colors.grey[100],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(25),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _isSaving
+                      ? const SizedBox(
+                          width: 48,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : CircleAvatar(
+                          backgroundColor: Colors.blue,
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.arrow_upward,
+                              color: Colors.white,
+                            ),
+                            onPressed: _addRemark,
+                          ),
+                        ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
