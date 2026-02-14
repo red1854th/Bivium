@@ -35,7 +35,7 @@ class _DetailPageState extends State<DetailPage> {
   bool isLoading = true;
   bool isExpanded = false;
   int _currentIndex = 0; // 하단 탭 인덱스
-  int _currentCardPageIndex = 0; // 현재 선택된 카드 인덱스
+  int _currentCardPageIndex = 0; // 현재 선택된 카드 리스트 인덱스
 
   final PageController _pageController = PageController();
   final ScrollController _itemsScrollController = ScrollController();
@@ -82,9 +82,45 @@ class _DetailPageState extends State<DetailPage> {
     }
   }
 
+  /// 카드 편집 페이지 이동 및 결과 처리 (개편된 로직)
+  void _goToEditPage(int index) async {
+    FocusScope.of(context).unfocus();
+
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (context) => EditCardPage(
+          cards: cards,
+          initialCardIndex: index,
+          setInfo: widget.setInfo,
+          driveService: widget.driveService,
+        ),
+      ),
+    );
+
+    if (result == null || !mounted) return;
+
+    // 데이터 및 마지막 인덱스 상태 갱신
+    setState(() {
+      if (result['cards'] != null) {
+        cards = List<Flashcard>.from(result['cards']);
+      }
+      if (result['lastIndex'] != null) {
+        _currentCardPageIndex = result['lastIndex'];
+      }
+    });
+
+    // 갱신된 인덱스로 리스트 스크롤 동기화
+    _navigateToCard(_currentCardPageIndex);
+  }
+
+  /// 특정 인덱스의 카드로 스크롤 및 탭 이동
   void _navigateToCard(int index) {
     if (index < 0 || index >= cards.length) return;
+
+    // 1. 먼저 리스트 탭(0번)으로 이동
     _onTabTapped(0);
+
+    // 2. 탭 전환 애니메이션 시간을 고려하여 지연 후 스크롤 실행
     Future.delayed(const Duration(milliseconds: 350), () {
       if (_itemsScrollController.hasClients) {
         const double itemHeight = 82.0;
@@ -336,33 +372,7 @@ class _DetailPageState extends State<DetailPage> {
                       ItemsTab(
                         cards: cards,
                         currentPageIndex: _currentCardPageIndex,
-                        onCardSelected: (index) async {
-                          // [주의] ItemsTab 내부에서 Navigator.pop이 불리는지 확인 필요
-                          // 포커스 해제로 키보드 닫기
-                          FocusScope.of(context).unfocus();
-
-                          final result = await Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => EditCardPage(
-                                cards: cards,
-                                initialCardIndex: index,
-                                setInfo: widget.setInfo,
-                                driveService: widget.driveService,
-                              ),
-                            ),
-                          );
-
-                          if (result != null && result is Map && mounted) {
-                            setState(() {
-                              if (result['cards'] != null) {
-                                cards = List<Flashcard>.from(result['cards']);
-                              }
-                              if (result['lastIndex'] != null) {
-                                _currentCardPageIndex = result['lastIndex'];
-                              }
-                            });
-                          }
-                        },
+                        onCardSelected: _goToEditPage, // 개편된 메서드 연결
                         setInfo: widget.setInfo,
                         driveService: widget.driveService,
                         scrollController: _itemsScrollController,

@@ -44,7 +44,7 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
     int initialIdx = _findDisplayIndex(widget.currentPageIndex);
     _wheelController = FixedExtentScrollController(initialItem: initialIdx);
     _scrollOffset = initialIdx.toDouble();
-
+    _selectedDisplayIndex = initialIdx;
     _wheelController.addListener(_scrollListener);
   }
 
@@ -59,11 +59,18 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
   int _findDisplayIndex(int originalIdx) {
     for (int i = 0; i < _displayItems.length; i++) {
       final item = _displayItems[i];
+
+      // 1. 일반 카드인 경우 비교
       if (item is Flashcard && widget.cards.indexOf(item) == originalIdx) {
         return i;
       }
+
+      // 2. [추가] 가상 헤더(Map)인 경우 내부에 저장된 originalIndex와 비교
+      if (item is Map && item['originalIndex'] == originalIdx) {
+        return i + 1;
+      }
     }
-    return 0;
+    return 0; // 여전히 못 찾으면 첫 항목으로 보냄
   }
 
   bool _checkHasChildren(int index) {
@@ -90,13 +97,11 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
 
       for (int i = 0; i < widget.cards.length; i++) {
         final card = widget.cards[i];
+        final bool isParent = _checkHasChildren(i);
+        final bool isCurrentTarget = (i == widget.currentPageIndex);
 
-        if (skippingMode) {
-          if (card.groupDepth > skipDepth) continue;
-          skippingMode = false;
-        }
-
-        if (_checkHasChildren(i)) {
+        // 1. 가상 헤더 추가 (폴더 상단 디자인)
+        if (isParent) {
           result.add({
             'type': 'group_header',
             'parent': card,
@@ -104,11 +109,23 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
           });
         }
 
-        bool isParent = _checkHasChildren(i);
+        // 2. 스킵 모드 처리
+        if (skippingMode) {
+          if (isCurrentTarget) {
+            result.add(card); // 접혀있어도 현재 보고 있는 카드면 예외 노출
+          }
+
+          if (card.groupDepth > skipDepth) continue;
+          skippingMode = false;
+        }
+
+        // 3. 실제 카드 아이템 추가
+        // 부모 카드(폴더)일 경우, 펼쳐져 있을 때만 본체 카드를 헤더 아래에 추가
         if (!isParent || (isParent && !card.isCollapsed)) {
           result.add(card);
         }
 
+        // 4. 스킵 모드 진입 설정
         if (isParent && card.isCollapsed) {
           skippingMode = true;
           skipDepth = card.groupDepth;

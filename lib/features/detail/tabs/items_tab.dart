@@ -10,6 +10,7 @@ import 'package:bivium/features/detail/remark_page.dart';
 class ItemsTab extends StatefulWidget {
   final List<Flashcard> cards;
   final int currentPageIndex;
+
   final Function(int) onCardSelected;
   final dynamic setInfo;
   final GoogleDriveService? driveService;
@@ -54,9 +55,28 @@ class _ItemsTabState extends State<ItemsTab> {
   @override
   void didUpdateWidget(ItemsTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // cards 리스트나 개별 카드의 isCollapsed 상태가 변경되었을 수 있으므로
-    // 항상 displayItems를 재계산
-    _updateDisplayItems();
+
+    // 1. 데이터(카드 리스트)나 현재 인덱스가 변경되었을 때 실행
+    if (oldWidget.cards != widget.cards ||
+        oldWidget.currentPageIndex != widget.currentPageIndex) {
+      _updateDisplayItems(); // 데이터 구조 재계산
+
+      // 2. 새로운 인덱스에 해당하는 DisplayIndex 계산
+      int newDisplayIdx = _findDisplayIndex(widget.currentPageIndex);
+
+      // 3. 컨트롤러가 붙어있다면 즉시 해당 위치로 이동 (애니메이션 없이 정확히 점프)
+      if (_wheelController.hasClients &&
+          _selectedDisplayIndex != newDisplayIdx) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_wheelController.hasClients) {
+            _wheelController.jumpToItem(newDisplayIdx);
+            setState(() {
+              _selectedDisplayIndex = newDisplayIdx;
+            });
+          }
+        });
+      }
+    }
   }
 
   void _scrollListener() {
@@ -66,18 +86,20 @@ class _ItemsTabState extends State<ItemsTab> {
   }
 
   int _findDisplayIndex(int originalIdx) {
-    if (originalIdx < 0 || originalIdx >= widget.cards.length) return 0;
-    final targetCard = widget.cards[originalIdx];
     for (int i = 0; i < _displayItems.length; i++) {
       final item = _displayItems[i];
-      if (item is Flashcard && item == targetCard) return i;
-      if (item is Map &&
-          item['type'] == 'group_header' &&
-          item['parent'] == targetCard) {
+
+      // 1. 일반 카드인 경우 비교
+      if (item is Flashcard && widget.cards.indexOf(item) == originalIdx) {
         return i;
       }
+
+      // 2. [추가] 가상 헤더(Map)인 경우 내부에 저장된 originalIndex와 비교
+      if (item is Map && item['originalIndex'] == originalIdx) {
+        return i + 1;
+      }
     }
-    return 0;
+    return 0; // 여전히 못 찾으면 첫 항목으로 보냄
   }
 
   bool _checkHasChildren(int index) {
@@ -90,6 +112,7 @@ class _ItemsTabState extends State<ItemsTab> {
     List<dynamic> result = [];
 
     if (query.isNotEmpty) {
+      // 검색 모드: 검색어와 일치하는 카드만 필터링하여 노출
       for (int i = 0; i < widget.cards.length; i++) {
         final card = widget.cards[i];
         if (card.front.toLowerCase().contains(query) ||
@@ -99,34 +122,56 @@ class _ItemsTabState extends State<ItemsTab> {
         }
       }
     } else {
-      int? skipDepth;
+      // 일반 모드: 계층 구조 및 접힘 상태 반영
+      bool skippingMode = false;
+      int skipDepth = 0;
 
       for (int i = 0; i < widget.cards.length; i++) {
         final card = widget.cards[i];
-
-        if (skipDepth != null) {
-          if (card.groupDepth > skipDepth) continue;
-          skipDepth = null;
-        }
-
         final bool isParent = _checkHasChildren(i);
+        final bool isCurrentTarget = (i == widget.currentPageIndex);
 
+        // 1. 가상 헤더 추가 (폴더 상단 디자인)
+        // 부모인 경우 스킵 모드 여부와 관계없이 헤더를 먼저 생성
         if (isParent) {
           result.add({
             'type': 'group_header',
             'parent': card,
             'originalIndex': i,
           });
+        }
 
-          if (card.isCollapsed) {
-            skipDepth = card.groupDepth;
-            continue;
+        // 2. 카드 본체 추가 로직
+        if (isCurrentTarget) {
+          // 현재 학습 중인 카드는 접힌 상태라도 무조건 리스트에 포함 (사용자 편의성)
+          result.add(card);
+        } else if (!skippingMode) {
+          // 스킵 모드가 아닐 때, 부모인 경우 펼쳐졌을 때만 본체 추가
+          if (!isParent || (isParent && !card.isCollapsed)) {
+            result.add(card);
           }
         }
-        result.add(card);
+
+        // 3. 스킵 모드 갱신
+        if (skippingMode) {
+          // 현재 카드가 스킵 기준 깊이와 같거나 낮아지면 스킵 종료
+          if (card.groupDepth <= skipDepth) {
+            skippingMode = false;
+          }
+        }
+
+        // 4. 새로운 스킵 모드 진입
+        // 부모 카드가 접힌 상태라면 다음 아이템부터 스킵 시작
+        if (isParent && card.isCollapsed) {
+          skippingMode = true;
+          skipDepth = card.groupDepth;
+        }
       }
     }
-    setState(() => _displayItems = result);
+
+    setState(() {
+      _displayItems = result;
+    });
   }
 
   void _onSearchChanged(String query) {
@@ -198,9 +243,7 @@ class _ItemsTabState extends State<ItemsTab> {
                             controller: _wheelController,
                             minThumbLength: 40.0,
                             mainAxisMargin: 4.0,
-                            thumbColor: AppColors.cBrand600.withValues(
-                              alpha: 0.8,
-                            ),
+                            thumbColor: AppColors.cBrand600,
                             thickness: 8,
                             radius: const Radius.circular(10),
                             thumbVisibility: true,
