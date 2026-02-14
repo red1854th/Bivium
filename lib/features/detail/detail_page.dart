@@ -8,6 +8,7 @@ import 'tabs/items_tab.dart';
 import 'tabs/statistics_tab.dart';
 import 'tabs/glossary_tab.dart';
 import 'package:bivium/features/home/edit_project_page.dart';
+import 'package:bivium/widgets/card_list_common.dart';
 
 class DetailPage extends StatefulWidget {
   final FlashcardSet setInfo;
@@ -47,6 +48,7 @@ class _DetailPageState extends State<DetailPage> {
   @override
   void dispose() {
     _pageController.dispose();
+    SearchManager().reset(); // 홈으로 돌아갈 때 검색 소거
     super.dispose();
   }
 

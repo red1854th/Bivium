@@ -30,6 +30,7 @@ class CardJumpDialog extends StatefulWidget {
 class _CardJumpDialogState extends State<CardJumpDialog> {
   late FixedExtentScrollController _wheelController;
   final TextEditingController _searchController = TextEditingController();
+  bool _isSearchPinned = false;
 
   List<dynamic> _displayItems = [];
   double _scrollOffset = 0.0;
@@ -40,6 +41,14 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
   @override
   void initState() {
     super.initState();
+
+    final searchMgr = SearchManager();
+    _isSearchPinned = searchMgr.isPinned;
+    if (_isSearchPinned) {
+      _searchController.text = searchMgr.query;
+    }
+    searchMgr.addListener(_onSearchManagerChanged);
+
     _updateDisplayItems();
 
     int initialIdx = _findDisplayIndex(widget.currentPageIndex);
@@ -47,6 +56,21 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
     _scrollOffset = initialIdx.toDouble();
     _selectedDisplayIndex = initialIdx;
     _wheelController.addListener(_scrollListener);
+  }
+
+  void _onSearchManagerChanged() {
+    final searchMgr = SearchManager();
+    if (searchMgr.isPinned && _searchController.text != searchMgr.query) {
+      setState(() {
+        _isSearchPinned = searchMgr.isPinned;
+        _searchController.text = searchMgr.query;
+      });
+      _updateDisplayItems();
+    } else if (_isSearchPinned != searchMgr.isPinned) {
+      setState(() {
+        _isSearchPinned = searchMgr.isPinned;
+      });
+    }
   }
 
   void _scrollListener() {
@@ -80,10 +104,20 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
   }
 
   void _onSearchChanged(String query) {
+    if (_isSearchPinned) {
+      SearchManager().update(query, true);
+    }
     _updateDisplayItems();
     if (_wheelController.hasClients && _displayItems.isNotEmpty) {
       _wheelController.jumpToItem(0);
     }
+  }
+
+  void _onPinToggled() {
+    setState(() {
+      _isSearchPinned = !_isSearchPinned;
+      SearchManager().update(_searchController.text, _isSearchPinned);
+    });
   }
 
   void _updateScrollPosition(Offset localPosition, double trackHeight) {
@@ -98,6 +132,7 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
 
   @override
   void dispose() {
+    SearchManager().removeListener(_onSearchManagerChanged);
     _wheelController.removeListener(_scrollListener);
     _wheelController.dispose();
     _searchController.dispose();
@@ -127,6 +162,8 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
                 controller: _searchController,
                 onChanged: _onSearchChanged,
                 isDark: isDark,
+                isPinned: _isSearchPinned,
+                onPinToggled: _onPinToggled,
               ),
               Expanded(
                 child: LayoutBuilder(

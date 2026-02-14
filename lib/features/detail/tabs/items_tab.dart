@@ -33,6 +33,7 @@ class ItemsTab extends StatefulWidget {
 class _ItemsTabState extends State<ItemsTab> {
   late FixedExtentScrollController _wheelController;
   final TextEditingController _searchController = TextEditingController();
+  bool _isSearchPinned = false;
 
   List<dynamic> _displayItems = [];
   final double _itemExtent = 95.0;
@@ -41,6 +42,15 @@ class _ItemsTabState extends State<ItemsTab> {
   @override
   void initState() {
     super.initState();
+
+    final searchMgr = SearchManager();
+    _isSearchPinned = searchMgr.isPinned;
+    if (_isSearchPinned) {
+      _searchController.text = searchMgr.query;
+    }
+
+    searchMgr.addListener(_onSearchManagerChanged);
+
     _updateDisplayItems();
 
     int initialIdx = _findDisplayIndex(widget.currentPageIndex);
@@ -48,6 +58,30 @@ class _ItemsTabState extends State<ItemsTab> {
     _wheelController = FixedExtentScrollController(initialItem: initialIdx);
 
     _wheelController.addListener(_scrollListener);
+  }
+
+  void _onSearchManagerChanged() {
+    final searchMgr = SearchManager();
+    if (searchMgr.isPinned && _searchController.text != searchMgr.query) {
+      setState(() {
+        _isSearchPinned = searchMgr.isPinned;
+        _searchController.text = searchMgr.query;
+      });
+      _updateDisplayItems();
+    } else if (_isSearchPinned != searchMgr.isPinned) {
+      setState(() {
+        _isSearchPinned = searchMgr.isPinned;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    SearchManager().removeListener(_onSearchManagerChanged);
+    _wheelController.removeListener(_scrollListener);
+    _wheelController.dispose();
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -103,18 +137,20 @@ class _ItemsTabState extends State<ItemsTab> {
   }
 
   void _onSearchChanged(String query) {
+    if (_isSearchPinned) {
+      SearchManager().update(query, true);
+    }
     _updateDisplayItems();
     if (_wheelController.hasClients && _displayItems.isNotEmpty) {
       _wheelController.jumpToItem(0);
     }
   }
 
-  @override
-  void dispose() {
-    _wheelController.removeListener(_scrollListener);
-    _wheelController.dispose();
-    _searchController.dispose();
-    super.dispose();
+  void _onPinToggled() {
+    setState(() {
+      _isSearchPinned = !_isSearchPinned;
+      SearchManager().update(_searchController.text, _isSearchPinned);
+    });
   }
 
   @override
@@ -140,6 +176,8 @@ class _ItemsTabState extends State<ItemsTab> {
                 controller: _searchController,
                 onChanged: _onSearchChanged,
                 isDark: isDark,
+                isPinned: _isSearchPinned,
+                onPinToggled: _onPinToggled,
               ),
               Expanded(
                 child: LayoutBuilder(

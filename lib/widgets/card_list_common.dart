@@ -643,33 +643,114 @@ class CardSearchField extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final bool isDark;
+  final bool isPinned;
+  final VoidCallback onPinToggled;
 
   const CardSearchField({
     super.key,
     required this.controller,
     required this.onChanged,
     required this.isDark,
+    required this.isPinned,
+    required this.onPinToggled,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-      child: TextField(
-        controller: controller,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          hintText: "search".tr(),
-          prefixIcon: const Icon(Icons.search, size: 20),
-          filled: true,
-          fillColor: isDark ? AppColors.cSlate800 : AppColors.cSlate100,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: onChanged,
+              decoration: InputDecoration(
+                hintText: "search".tr(),
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: controller.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          controller.clear();
+                          onChanged('');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: isDark ? AppColors.cSlate800 : AppColors.cSlate100,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
           ),
-          contentPadding: EdgeInsets.zero,
-        ),
+          const SizedBox(width: 8),
+          Material(
+            color: isPinned
+                ? AppColors.cBrand600.withValues(alpha: 0.15)
+                : (isDark ? AppColors.cSlate800 : AppColors.cSlate100),
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              onTap: onPinToggled,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: isPinned
+                      ? Border.all(color: AppColors.cBrand600, width: 1.5)
+                      : null,
+                ),
+                child: Icon(
+                  isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+                  size: 20,
+                  color: isPinned
+                      ? AppColors.cBrand600
+                      : (isDark ? Colors.white38 : Colors.black38),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+}
+
+class SearchManager extends ChangeNotifier {
+  static final SearchManager _instance = SearchManager._internal();
+  factory SearchManager() => _instance;
+  SearchManager._internal();
+
+  String _query = '';
+  bool _isPinned = false;
+
+  String get query => _query;
+  bool get isPinned => _isPinned;
+
+  void update(String q, bool pinned) {
+    if (_query == q && _isPinned == pinned) return;
+    _query = q;
+    _isPinned = pinned;
+    notifyListeners();
+  }
+
+  void resetIfUnpinned() {
+    if (!_isPinned && _query.isNotEmpty) {
+      _query = '';
+      notifyListeners();
+    }
+  }
+
+  void reset() {
+    if (_query.isNotEmpty || _isPinned) {
+      _query = '';
+      _isPinned = false;
+      notifyListeners();
+    }
   }
 }
