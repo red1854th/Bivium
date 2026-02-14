@@ -8,7 +8,6 @@ import 'tabs/items_tab.dart';
 import 'tabs/statistics_tab.dart';
 import 'tabs/glossary_tab.dart';
 import 'package:bivium/features/home/edit_project_page.dart';
-import 'package:bivium/features/detail/edit_card_page.dart';
 
 class DetailPage extends StatefulWidget {
   final FlashcardSet setInfo;
@@ -38,7 +37,6 @@ class _DetailPageState extends State<DetailPage> {
   int _currentCardPageIndex = 0; // 현재 선택된 카드 리스트 인덱스
 
   final PageController _pageController = PageController();
-  final ScrollController _itemsScrollController = ScrollController();
 
   @override
   void initState() {
@@ -49,7 +47,6 @@ class _DetailPageState extends State<DetailPage> {
   @override
   void dispose() {
     _pageController.dispose();
-    _itemsScrollController.dispose();
     super.dispose();
   }
 
@@ -74,63 +71,14 @@ class _DetailPageState extends State<DetailPage> {
     }
   }
 
-  void _updateLocalCards(List<Flashcard>? updatedList) {
-    if (updatedList != null && mounted) {
-      setState(() {
-        cards = List<Flashcard>.from(updatedList);
-      });
-    }
-  }
-
-  /// 카드 편집 페이지 이동 및 결과 처리 (개편된 로직)
-  void _goToEditPage(int index) async {
-    FocusScope.of(context).unfocus();
-
-    final result = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(
-        builder: (context) => EditCardPage(
-          cards: cards,
-          initialCardIndex: index,
-          setInfo: widget.setInfo,
-          driveService: widget.driveService,
-        ),
-      ),
-    );
-
-    if (result == null || !mounted) return;
-
-    // 데이터 및 마지막 인덱스 상태 갱신
-    setState(() {
-      if (result['cards'] != null) {
-        cards = List<Flashcard>.from(result['cards']);
-      }
-      if (result['lastIndex'] != null) {
-        _currentCardPageIndex = result['lastIndex'];
-      }
-    });
-
-    // 갱신된 인덱스로 리스트 스크롤 동기화
-    _navigateToCard(_currentCardPageIndex);
-  }
-
   /// 특정 인덱스의 카드로 스크롤 및 탭 이동
   void _navigateToCard(int index) {
     if (index < 0 || index >= cards.length) return;
 
-    // 1. 먼저 리스트 탭(0번)으로 이동
-    _onTabTapped(0);
+    setState(() => _currentCardPageIndex = index);
 
-    // 2. 탭 전환 애니메이션 시간을 고려하여 지연 후 스크롤 실행
-    Future.delayed(const Duration(milliseconds: 350), () {
-      if (_itemsScrollController.hasClients) {
-        const double itemHeight = 82.0;
-        _itemsScrollController.animateTo(
-          index * itemHeight,
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.fastOutSlowIn,
-        );
-      }
-    });
+    // 먼저 리스트 탭(0번)으로 이동
+    _onTabTapped(0);
   }
 
   void _onTabTapped(int index) {
@@ -372,13 +320,17 @@ class _DetailPageState extends State<DetailPage> {
                       ItemsTab(
                         cards: cards,
                         currentPageIndex: _currentCardPageIndex,
-                        onCardSelected: _goToEditPage, // 개편된 메서드 연결
+                        onCardSelected: (index) {
+                          setState(() => _currentCardPageIndex = index);
+                        },
+                        onCardsUpdated: (updatedList, lastIndex) {
+                          setState(() {
+                            cards = updatedList;
+                            _currentCardPageIndex = lastIndex;
+                          });
+                        },
                         setInfo: widget.setInfo,
                         driveService: widget.driveService,
-                        scrollController: _itemsScrollController,
-                        onRefresh: (updatedList) async {
-                          _updateLocalCards(updatedList);
-                        },
                       ),
                       StatisticsTab(
                         cards: cards,

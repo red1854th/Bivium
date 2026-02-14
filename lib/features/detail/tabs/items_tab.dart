@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:math' as math;
 import 'package:easy_localization/easy_localization.dart';
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/core/theme.dart';
 import 'package:bivium/services/google_drive_service.dart';
 import 'package:bivium/features/detail/remark_page.dart';
+import 'package:bivium/features/detail/edit_card_page.dart';
+import 'package:bivium/widgets/card_list_common.dart';
 
 class ItemsTab extends StatefulWidget {
   final List<Flashcard> cards;
   final int currentPageIndex;
-
-  final Function(int) onCardSelected;
+  final Function(int) onCardSelected; // 탭 이동 시의 선택 동기화용
+  final Function(List<Flashcard>, int)? onCardsUpdated; // 데이터 변경 알림용
   final dynamic setInfo;
   final GoogleDriveService? driveService;
-  final ScrollController? scrollController;
-  final Future<void> Function(List<Flashcard>)? onRefresh;
 
   const ItemsTab({
     super.key,
@@ -24,8 +23,7 @@ class ItemsTab extends StatefulWidget {
     required this.driveService,
     required this.currentPageIndex,
     required this.onCardSelected,
-    required this.scrollController,
-    required this.onRefresh,
+    this.onCardsUpdated,
   });
 
   @override
@@ -55,26 +53,23 @@ class _ItemsTabState extends State<ItemsTab> {
   @override
   void didUpdateWidget(ItemsTab oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _updateDisplayItems();
 
-    // 1. 데이터(카드 리스트)나 현재 인덱스가 변경되었을 때 실행
-    if (oldWidget.cards != widget.cards ||
-        oldWidget.currentPageIndex != widget.currentPageIndex) {
-      _updateDisplayItems(); // 데이터 구조 재계산
+    // 부모로부터 인덱스가 직접적으로 변경된 경우 (예: 통계 탭 점프)
+    if (widget.currentPageIndex != oldWidget.currentPageIndex) {
+      _navigateToCard(widget.currentPageIndex);
+    }
+  }
 
-      // 2. 새로운 인덱스에 해당하는 DisplayIndex 계산
-      int newDisplayIdx = _findDisplayIndex(widget.currentPageIndex);
-
-      // 3. 컨트롤러가 붙어있다면 즉시 해당 위치로 이동 (애니메이션 없이 정확히 점프)
-      if (_wheelController.hasClients &&
-          _selectedDisplayIndex != newDisplayIdx) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_wheelController.hasClients) {
-            _wheelController.jumpToItem(newDisplayIdx);
-            setState(() {
-              _selectedDisplayIndex = newDisplayIdx;
-            });
-          }
-        });
+  void _navigateToCard(int index) {
+    if (_wheelController.hasClients) {
+      int displayIdx = _findDisplayIndex(index);
+      if (_selectedDisplayIndex != displayIdx) {
+        _wheelController.animateToItem(
+          displayIdx,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.fastOutSlowIn,
+        );
       }
     }
   }
@@ -86,91 +81,24 @@ class _ItemsTabState extends State<ItemsTab> {
   }
 
   int _findDisplayIndex(int originalIdx) {
-    for (int i = 0; i < _displayItems.length; i++) {
-      final item = _displayItems[i];
-
-      // 1. 일반 카드인 경우 비교
-      if (item is Flashcard && widget.cards.indexOf(item) == originalIdx) {
-        return i;
-      }
-
-      // 2. [추가] 가상 헤더(Map)인 경우 내부에 저장된 originalIndex와 비교
-      if (item is Map && item['originalIndex'] == originalIdx) {
-        return i + 1;
-      }
-    }
-    return 0; // 여전히 못 찾으면 첫 항목으로 보냄
+    return CardListUtils.findDisplayIndex(
+      originalIdx: originalIdx,
+      displayItems: _displayItems,
+      allCards: widget.cards,
+    );
   }
 
   bool _checkHasChildren(int index) {
-    if (index >= widget.cards.length - 1) return false;
-    return widget.cards[index + 1].groupDepth > widget.cards[index].groupDepth;
+    return CardListUtils.checkHasChildren(index, widget.cards);
   }
 
-  void _updateDisplayItems() {
-    final query = _searchController.text.toLowerCase();
-    List<dynamic> result = [];
-
-    if (query.isNotEmpty) {
-      // 검색 모드: 검색어와 일치하는 카드만 필터링하여 노출
-      for (int i = 0; i < widget.cards.length; i++) {
-        final card = widget.cards[i];
-        if (card.front.toLowerCase().contains(query) ||
-            card.back.toLowerCase().contains(query) ||
-            card.key.toLowerCase().contains(query)) {
-          result.add(card);
-        }
-      }
-    } else {
-      // 일반 모드: 계층 구조 및 접힘 상태 반영
-      bool skippingMode = false;
-      int skipDepth = 0;
-
-      for (int i = 0; i < widget.cards.length; i++) {
-        final card = widget.cards[i];
-        final bool isParent = _checkHasChildren(i);
-        final bool isCurrentTarget = (i == widget.currentPageIndex);
-
-        // 1. 가상 헤더 추가 (폴더 상단 디자인)
-        // 부모인 경우 스킵 모드 여부와 관계없이 헤더를 먼저 생성
-        if (isParent) {
-          result.add({
-            'type': 'group_header',
-            'parent': card,
-            'originalIndex': i,
-          });
-        }
-
-        // 2. 카드 본체 추가 로직
-        if (isCurrentTarget) {
-          // 현재 학습 중인 카드는 접힌 상태라도 무조건 리스트에 포함 (사용자 편의성)
-          result.add(card);
-        } else if (!skippingMode) {
-          // 스킵 모드가 아닐 때, 부모인 경우 펼쳐졌을 때만 본체 추가
-          if (!isParent || (isParent && !card.isCollapsed)) {
-            result.add(card);
-          }
-        }
-
-        // 3. 스킵 모드 갱신
-        if (skippingMode) {
-          // 현재 카드가 스킵 기준 깊이와 같거나 낮아지면 스킵 종료
-          if (card.groupDepth <= skipDepth) {
-            skippingMode = false;
-          }
-        }
-
-        // 4. 새로운 스킵 모드 진입
-        // 부모 카드가 접힌 상태라면 다음 아이템부터 스킵 시작
-        if (isParent && card.isCollapsed) {
-          skippingMode = true;
-          skipDepth = card.groupDepth;
-        }
-      }
-    }
-
+  void _updateDisplayItems({int? targetIndex}) {
     setState(() {
-      _displayItems = result;
+      _displayItems = CardListUtils.getDisplayItems(
+        allCards: widget.cards,
+        searchQuery: _searchController.text,
+        currentTargetIndex: targetIndex ?? widget.currentPageIndex,
+      );
     });
   }
 
@@ -208,7 +136,11 @@ class _ItemsTabState extends State<ItemsTab> {
           ),
           child: Column(
             children: [
-              _buildSearchField(isDark),
+              CardSearchField(
+                controller: _searchController,
+                onChanged: _onSearchChanged,
+                isDark: isDark,
+              ),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -243,7 +175,9 @@ class _ItemsTabState extends State<ItemsTab> {
                             controller: _wheelController,
                             minThumbLength: 40.0,
                             mainAxisMargin: 4.0,
-                            thumbColor: AppColors.cBrand600,
+                            thumbColor: AppColors.cBrand600.withValues(
+                              alpha: 0.8,
+                            ),
                             thickness: 8,
                             radius: const Radius.circular(10),
                             thumbVisibility: true,
@@ -259,6 +193,14 @@ class _ItemsTabState extends State<ItemsTab> {
                               onSelectedItemChanged: (index) {
                                 setState(() => _selectedDisplayIndex = index);
                                 HapticFeedback.selectionClick();
+
+                                // 현재 선택된 리스트 아이템이 Flashcard인 경우 원본 인덱스 추출하여 부모에 알림
+                                final item = _displayItems[index];
+                                if (item is Flashcard) {
+                                  widget.onCardSelected(
+                                    widget.cards.indexOf(item),
+                                  );
+                                }
                               },
                               childDelegate: ListWheelChildBuilderDelegate(
                                 childCount: _displayItems.length,
@@ -332,159 +274,41 @@ class _ItemsTabState extends State<ItemsTab> {
   }
 
   Widget _buildFolderHeader(Flashcard parent, int index, bool isDark) {
-    final int depth = parent.groupDepth;
-    final bool isSelected = _selectedDisplayIndex == index;
+    return FlashcardFolderHeader(
+      parent: parent,
+      index: index,
+      isSelected: _selectedDisplayIndex == index,
+      isDark: isDark,
+      onTap: () async {
+        setState(() {
+          parent.isCollapsed = !parent.isCollapsed;
+          _updateDisplayItems();
+        });
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-      child: Row(
-        children: [
-          for (int i = 0; i < depth; i++)
-            const SizedBox(
-              width: 16,
-              child: Center(
-                child: Text(
-                  '↳',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          Expanded(
-            child: Material(
-              color: (parent.isFlagged
-                  ? (isDark ? const Color(0xFF4D4000) : const Color(0xFFFFF9C4))
-                  : (isDark ? AppColors.cSlate900 : AppColors.cSlate50)),
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                onTap: () async {
-                  // 로컬 UI 업데이트
-                  setState(() {
-                    parent.isCollapsed = !parent.isCollapsed;
-                    _updateDisplayItems();
-                  });
+        if (widget.driveService != null) {
+          bool isValidGroupRange =
+              (parent.groupEndIndex - parent.groupStartIndex) > 1;
 
-                  if (widget.driveService != null) {
-                    // [중요] depth와 range가 모두 유효한지 최종 검증
-                    // 로드부가 완벽하더라도, 전송 직전에 이 값이 '단일 행'이 아닌지 확인해야 합니다.
-                    bool isValidGroupRange =
-                        (parent.groupEndIndex - parent.groupStartIndex) > 1;
-
-                    if (isValidGroupRange) {
-                      try {
-                        await widget.driveService!.updateRowGroupExpansion(
-                          spreadsheetId: widget.setInfo.sheetId,
-                          sheetId: widget.setInfo.gid,
-                          collapse: parent.isCollapsed,
-                          startIndex: parent.groupStartIndex,
-                          endIndex: parent.groupEndIndex,
-                          depth: parent.controlGroupDepth, // 컨트롤하는 그룹의 depth
-                        );
-                      } catch (e) {
-                        debugPrint('동기화 실패: $e');
-                      }
-                    } else {
-                      debugPrint(
-                        'Warning: 잘못된 그룹 범위 전송 시도 - ${parent.groupStartIndex}:${parent.groupEndIndex}',
-                      );
-                    }
-                  }
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  height: 82.0,
-                  padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: isSelected
-                          ? AppColors.cBrand600
-                          : (isDark
-                                ? AppColors.cDarkBorder
-                                : AppColors.cSlate300),
-                      width: isSelected ? 2.0 : 1.5,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        parent.isCollapsed
-                            ? Icons.folder_rounded
-                            : Icons.folder_open_rounded,
-                        color: AppColors.cBrand600,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              parent.key,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey,
-                                fontFamily: 'monospace',
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    parent.front.replaceAll('\n', ' '),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 8),
-                                  child: Text(
-                                    '|',
-                                    style: TextStyle(color: Colors.grey),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    parent.back.replaceAll('\n', ' '),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: isDark
-                                          ? AppColors.cSlate400
-                                          : AppColors.cSlate600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(
-                        Icons.expand_more_rounded,
-                        color: Colors.grey,
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+          if (isValidGroupRange) {
+            try {
+              await widget.driveService!.updateRowGroupExpansion(
+                spreadsheetId: widget.setInfo.sheetId,
+                sheetId: widget.setInfo.gid,
+                collapse: parent.isCollapsed,
+                startIndex: parent.groupStartIndex,
+                endIndex: parent.groupEndIndex,
+                depth: parent.controlGroupDepth,
+              );
+            } catch (e) {
+              debugPrint('동기화 실패: $e');
+            }
+          } else {
+            debugPrint(
+              'Warning: 잘못된 그룹 범위 전송 시도 - ${parent.groupStartIndex}:${parent.groupEndIndex}',
+            );
+          }
+        }
+      },
     );
   }
 
@@ -494,308 +318,140 @@ class _ItemsTabState extends State<ItemsTab> {
     int index,
     bool isDark,
   ) {
-    final int depth = card.groupDepth;
-    final bool isParent = _checkHasChildren(originalIndex);
-    final bool isSelected = _selectedDisplayIndex == index;
-
-    // 비활성 상태 버튼 배경색 정의
     final Color idleBtnColor = isDark
         ? Colors.white.withValues(alpha: 0.05)
         : Colors.black.withValues(alpha: 0.05);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-      child: Row(
-        children: [
-          for (int i = 0; i < depth; i++)
-            const SizedBox(
-              width: 16,
-              child: Center(
-                child: Text(
-                  '↳',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
+    return FlashcardListItem(
+      card: card,
+      originalIndex: originalIndex,
+      index: index,
+      isSelected: _selectedDisplayIndex == index,
+      isDark: isDark,
+      isParent: _checkHasChildren(originalIndex),
+      onTap: () => _goToEditPage(originalIndex),
+      actions: [
+        // Remark 버튼
+        Material(
+          color: card.remark.isNotEmpty
+              ? AppColors.cBrand600.withValues(alpha: 0.1)
+              : idleBtnColor,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            onTap: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => RemarkPage(
+                    service: widget.driveService!,
+                    spreadsheetId: widget.setInfo.sheetId,
+                    cardIndex: originalIndex,
+                    columnIdx: widget.setInfo.remarkColIdx,
+                    initialRemark: card.remark,
                   ),
                 ),
-              ),
-            ),
-          if (isParent)
-            const SizedBox(
-              width: 16,
-              child: Center(
-                child: Text(
-                  '↳',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => widget.onCardSelected(originalIndex),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: (card.isFlagged
-                      ? (isDark
-                            ? const Color(0xFF4D4000)
-                            : const Color(0xFFFFF9C4))
-                      : (isDark ? AppColors.cSlate900 : AppColors.cSlate50)),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.cBrand600
-                        : (isDark
-                              ? AppColors.cDarkBorder
-                              : AppColors.cSlate300),
-                    width: isSelected ? 2.0 : 1.0,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      height: 28,
-                      child: Row(
-                        children: [
-                          Text(
-                            '#${originalIndex + 1}',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.cBrand600,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              card.key,
-                              style: const TextStyle(
-                                fontSize: 9,
-                                color: Colors.grey,
-                                fontFamily: 'monospace',
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          // Remark 버튼 (비활성 시에도 배경색 유지)
-                          Material(
-                            color: card.remark.isNotEmpty
-                                ? AppColors.cBrand600.withValues(alpha: 0.1)
-                                : idleBtnColor,
-                            borderRadius: BorderRadius.circular(8),
-                            child: InkWell(
-                              onTap: () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => RemarkPage(
-                                      service: widget.driveService!,
-                                      spreadsheetId: widget.setInfo.sheetId,
-                                      cardIndex: originalIndex,
-                                      columnIdx: widget.setInfo.remarkColIdx,
-                                      initialRemark: card.remark,
-                                    ),
-                                  ),
-                                );
-                                if (result != null && result is String) {
-                                  setState(() {
-                                    card.remark = result;
-                                  });
-                                }
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Padding(
-                                padding: const EdgeInsets.all(6),
-                                child: Icon(
-                                  Icons.history_edu_rounded,
-                                  size: 18,
-                                  color: card.remark.isNotEmpty
-                                      ? AppColors.cBrand600
-                                      : Colors.grey,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          // Flag 버튼 (비활성 시에도 배경색 유지)
-                          Material(
-                            color: card.isFlagged
-                                ? Colors.orange.withValues(alpha: 0.1)
-                                : idleBtnColor,
-                            borderRadius: BorderRadius.circular(8),
-                            child: InkWell(
-                              onTap: () async {
-                                setState(() {
-                                  card.isFlagged = !card.isFlagged;
-                                });
-
-                                if (widget.driveService != null) {
-                                  try {
-                                    await widget.driveService!.updateFlashcard(
-                                      spreadsheetId: widget.setInfo.sheetId,
-                                      cardIndex: originalIndex,
-                                      setInfo: widget.setInfo,
-                                      card: card,
-                                    );
-                                  } catch (e) {
-                                    debugPrint('Flag 동기화 실패: $e');
-                                  }
-                                }
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Padding(
-                                padding: const EdgeInsets.all(6),
-                                child: Icon(
-                                  card.isFlagged
-                                      ? Icons.flag
-                                      : Icons.flag_outlined,
-                                  size: 18,
-                                  color: card.isFlagged
-                                      ? Colors.orange
-                                      : Colors.grey,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            card.front.replaceAll('\n', ' '),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6),
-                          child: Text(
-                            '|',
-                            style: TextStyle(color: Colors.grey, fontSize: 10),
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            card.back.replaceAll('\n', ' '),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark
-                                  ? AppColors.cSlate400
-                                  : AppColors.cSlate600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              );
+              if (result != null && result is String) {
+                setState(() {
+                  card.remark = result;
+                });
+                // 부모 데이터 동기화
+                widget.onCardsUpdated?.call(widget.cards, originalIndex);
+              }
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Icon(
+                Icons.history_edu_rounded,
+                size: 18,
+                color: card.remark.isNotEmpty
+                    ? AppColors.cBrand600
+                    : Colors.grey,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 4),
+        // Flag 버튼
+        Material(
+          color: card.isFlagged
+              ? Colors.orange.withValues(alpha: 0.1)
+              : idleBtnColor,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            onTap: () async {
+              setState(() {
+                card.isFlagged = !card.isFlagged;
+              });
+
+              if (widget.driveService != null) {
+                try {
+                  await widget.driveService!.updateFlashcard(
+                    spreadsheetId: widget.setInfo.sheetId,
+                    cardIndex: originalIndex,
+                    setInfo: widget.setInfo,
+                    card: card,
+                  );
+                  // 부모 데이터 동기화
+                  widget.onCardsUpdated?.call(widget.cards, originalIndex);
+                } catch (e) {
+                  debugPrint('Flag 동기화 실패: $e');
+                }
+              }
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Icon(
+                card.isFlagged ? Icons.flag : Icons.flag_outlined,
+                size: 18,
+                color: card.isFlagged ? Colors.orange : Colors.grey,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildSearchField(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-      child: TextField(
-        controller: _searchController,
-        onChanged: _onSearchChanged,
-        decoration: InputDecoration(
-          hintText: "search".tr(),
-          prefixIcon: const Icon(Icons.search, size: 20),
-          filled: true,
-          fillColor: isDark ? AppColors.cSlate800 : AppColors.cSlate100,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: EdgeInsets.zero,
+  void _goToEditPage(int index) async {
+    if (widget.driveService == null) return;
+    FocusScope.of(context).unfocus();
+
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (context) => EditCardPage(
+          cards: widget.cards,
+          initialCardIndex: index,
+          setInfo: widget.setInfo,
+          driveService: widget.driveService!,
         ),
       ),
     );
-  }
-}
 
-class HighlightTrackPainter extends CustomPainter {
-  final double progress;
-  final double angleRange;
-  final double radius;
-  final double yRange;
-  final Color baseColor;
-  final Color highlightColor;
+    if (result == null || !mounted) return;
 
-  HighlightTrackPainter({
-    required this.progress,
-    required this.angleRange,
-    required this.radius,
-    required this.yRange,
-    required this.baseColor,
-    required this.highlightColor,
-  });
+    if (result['cards'] != null && result['lastIndex'] != null) {
+      final List<Flashcard> updatedCards = List<Flashcard>.from(
+        result['cards'],
+      );
+      final int lastIdx = result['lastIndex'];
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final double centerX = size.width - 8.0;
-    final double centerY = size.height / 2;
-    final Paint paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
+      // 데이터 갱신 알림
+      widget.onCardsUpdated?.call(updatedCards, lastIdx);
 
-    final Path path = Path();
-    for (double p = 0.0; p <= 1.0; p += 0.01) {
-      final double angle = (p - 0.5) * angleRange;
-      final double x = (1 - math.cos(angle)) * radius;
-      final double y = math.sin(angle) * yRange + centerY;
-      p == 0.0 ? path.moveTo(centerX - x, y) : path.lineTo(centerX - x, y);
+      // 리스트 갱신 (lastIdx가 접힌 폴더 안에 있더라도 보이도록 강제)
+      _updateDisplayItems(targetIndex: lastIdx);
+
+      // 리스트 갱신 후 즉시 이동
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_wheelController.hasClients) {
+          int displayIdx = _findDisplayIndex(lastIdx);
+          _wheelController.jumpToItem(displayIdx);
+          setState(() => _selectedDisplayIndex = displayIdx);
+        }
+      });
     }
-    canvas.drawPath(
-      path,
-      paint
-        ..color = baseColor
-        ..strokeWidth = 4.0,
-    );
-
-    final Path highlight = Path();
-    final double hStart = (progress - 0.04).clamp(0.0, 1.0);
-    final double hEnd = (progress + 0.04).clamp(0.0, 1.0);
-    for (double p = hStart; p <= hEnd; p += 0.01) {
-      final double angle = (p - 0.5) * angleRange;
-      final double x = (1 - math.cos(angle)) * radius;
-      final double y = math.sin(angle) * yRange + centerY;
-      p == hStart
-          ? highlight.moveTo(centerX - x, y)
-          : highlight.lineTo(centerX - x, y);
-    }
-    canvas.drawPath(
-      highlight,
-      paint
-        ..color = highlightColor
-        ..strokeWidth = 6.0,
-    );
   }
-
-  @override
-  bool shouldRepaint(HighlightTrackPainter old) => old.progress != progress;
 }
