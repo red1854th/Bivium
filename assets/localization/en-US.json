@@ -81,5 +81,8 @@
     "sheet_url_label": "Google Sheets URL or ID",
     "sheet_input_help": "Enter a Google Sheets URL to open the configuration screen.",
     "new_project": "New Project",
-    "language_settings": "Language Settings"
+    "language_settings": "Language Settings",
+    "recent": "Recents",
+    "all_projects": "Projects",
+    "search_results": "Search Results"
 }

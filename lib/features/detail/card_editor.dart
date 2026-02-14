@@ -61,7 +61,9 @@ class _CardEditorState extends State<CardEditor> {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
     final Color cardBg = widget.card.isFlagged
-        ? (isDark ? const Color(0xFF4D4000) : const Color(0xFFFFF9C4))
+        ? (isDark
+              ? const Color(0xFFFFFF00).withValues(alpha: 0.1)
+              : const Color(0xFFFFF9c4))
         : (isDark ? AppColors.cDarkBg : AppColors.cBg);
 
     return Container(
@@ -129,8 +131,13 @@ class _CardEditorState extends State<CardEditor> {
         children: [
           _iconAction(
             icon: Icons.history_edu_rounded,
-            onTap: () {
-              Navigator.push(
+            // remark 내용이 있을 경우 포인트 컬러(예: Colors.blue), 없을 경우 회색 적용
+            color: (widget.card.remark.trim().isNotEmpty)
+                ? AppColors.cBrand600
+                : Colors.grey,
+            onTap: () async {
+              // RemarkPage에서 돌아온 후 상태 반영을 위해 await와 setState 사용 권장
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => RemarkPage(
@@ -142,6 +149,9 @@ class _CardEditorState extends State<CardEditor> {
                   ),
                 ),
               );
+              if (mounted) {
+                setState(() {}); // 돌아왔을 때 remark 변경사항을 반영하여 아이콘 색상 갱신
+              }
             },
           ),
           _iconAction(

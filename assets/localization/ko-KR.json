@@ -81,5 +81,8 @@
     "sheet_url_label": "구글 스프레드시트 URL 또는 ID",
     "sheet_input_help": "구글 스프레드시트 URL을 입력하면 설정 화면이 열립니다.",
     "new_project": "새 프로젝트",
-    "language_settings": "언어 설정"
+    "language_settings": "언어 설정",
+    "recent": "최근 항목",
+    "all_projects": "프로젝트",
+    "search_results": "검색 결과"
 }

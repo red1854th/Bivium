@@ -217,8 +217,8 @@ class FlashcardFolderHeader extends StatelessWidget {
                     Material(
                       color: (parent.isFlagged
                           ? (isDark
-                                ? const Color(0xFF383000)
-                                : const Color(0xFFFFFDE7))
+                                ? const Color(0xFFFFFF00).withValues(alpha: 0.1)
+                                : const Color(0xFFFFF9c4))
                           : (isDark
                                 ? AppColors.cSlate900
                                 : AppColors.cSlate50)),
@@ -306,8 +306,8 @@ class FlashcardFolderHeader extends StatelessWidget {
                                           child: Padding(
                                             padding: EdgeInsets.only(
                                               right: hasActions
-                                                  ? 110
-                                                  : 80, // 패딩 증가
+                                                  ? 70
+                                                  : 0, // 최적화된 패딩
                                             ),
                                             child: Text(
                                               parent.key,
@@ -467,8 +467,8 @@ class FlashcardListItem extends StatelessWidget {
                     Material(
                       color: (card.isFlagged
                           ? (isDark
-                                ? const Color(0xFF383000)
-                                : const Color(0xFFFFFDE7))
+                                ? const Color(0xFFFFFF00).withValues(alpha: 0.1)
+                                : const Color(0xFFFFF9c4))
                           : (isDark
                                 ? AppColors.cSlate900
                                 : AppColors.cSlate50)),
@@ -526,8 +526,8 @@ class FlashcardListItem extends StatelessWidget {
                                   Expanded(
                                     child: Padding(
                                       padding: EdgeInsets.only(
-                                        right: hasActions ? 90 : 45, // 최적화된 패딩
-                                      ), // 버튼 공간 확보
+                                        right: hasActions ? 70 : 0, // 최적화된 패딩
+                                      ),
                                       child: Text(
                                         card.key,
                                         style: TextStyle(

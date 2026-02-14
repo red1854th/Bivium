@@ -38,6 +38,7 @@ flutter:
     - assets/data/
     - assets/fonts/
     - assets/localization/
+    - assets/wallpapers/
 
   fonts:
     - family: Roboto
