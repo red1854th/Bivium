@@ -178,8 +178,10 @@ class GoogleDriveService {
           final cells = rowData[i].values;
           if (cells != null && cells.length > set.frontColIdx) {
             // Front 열의 배경색 확인
-            final bgColor =
-                cells[set.frontColIdx].effectiveFormat?.backgroundColor;
+            final bgColor = cells[set.frontColIdx]
+                .effectiveFormat
+                ?.backgroundColorStyle
+                ?.rgbColor;
             if (bgColor != null) {
               // 노란색 계열(R:1.0, G:0.98, B:0.77)인지 판별
               // 오차를 감안하여 Red가 높고 Blue가 낮은지 확인
