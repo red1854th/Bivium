@@ -33,6 +33,7 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
   int _sourceColIdx = 0;
   int _targetColIdx = 1;
   int? _remarkColIdx;
+  int _gid = 0;
 
   @override
   void initState() {
@@ -50,11 +51,15 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
   Future<void> _loadHeaders() async {
     setState(() => _loadingHeaders = true);
 
-    List<String>? headers;
+    List<String>? headersList;
+    int fetchedGid = 0;
 
     if (widget.service != null) {
-      // Use Google Drive API if service is available
-      headers = await widget.service!.getSpreadsheetHeaders(widget.sheetId);
+      final info = await widget.service!.getSpreadsheetInfo(widget.sheetId);
+      if (info != null) {
+        headersList = info.headers;
+        fetchedGid = info.gid;
+      }
     } else {
       // Fallback: use CSV export
       try {
@@ -69,7 +74,7 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
           final lines = csvData.split('\n');
           if (lines.isNotEmpty) {
             final headerLine = lines[0];
-            headers = headerLine.split(',').map((h) => h.trim()).toList();
+            headersList = headerLine.split(',').map((h) => h.trim()).toList();
           }
         }
       } catch (e) {
@@ -80,10 +85,10 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
     if (!mounted) return;
 
     int? autoKeyIdx;
-    if (headers != null && headers.isNotEmpty) {
+    if (headersList != null && headersList.isNotEmpty) {
       // Auto-detect key column: A column containing "key" or "id" (case-insensitive)
-      for (int i = 0; i < headers.length; i++) {
-        final header = headers[i].toLowerCase();
+      for (int i = 0; i < headersList.length; i++) {
+        final header = headersList[i].toLowerCase();
         if (header.contains('key') || header.contains('id')) {
           autoKeyIdx = i;
           break;
@@ -92,7 +97,8 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
     }
 
     setState(() {
-      _headers = headers ?? [];
+      _headers = headersList ?? [];
+      _gid = fetchedGid;
       _loadingHeaders = false;
       if (autoKeyIdx != null) {
         _keyColIdx = autoKeyIdx;
@@ -132,6 +138,7 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
         title: _titleController.text.trim(),
         description: '',
         sheetId: widget.sheetId,
+        gid: _gid,
         frontColIdx: _sourceColIdx,
         backColIdx: _targetColIdx,
         keyColIdx: _keyColIdx ?? -1,

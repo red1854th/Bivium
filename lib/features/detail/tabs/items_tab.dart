@@ -280,9 +280,22 @@ class _ItemsTabState extends State<ItemsTab> {
       isSelected: _selectedDisplayIndex == index,
       isDark: isDark,
       onTap: () async {
+        // 1. 현재 클릭한 폴더의 원본 인덱스 저장
+        final int originalIdx = widget.cards.indexOf(parent);
+
         setState(() {
           parent.isCollapsed = !parent.isCollapsed;
           _updateDisplayItems();
+        });
+
+        // 2. 리스트 갱신 후, 해당 폴더의 새로운 display index를 찾아 즉시 이동
+        // 이를 통해 리스트 길이가 변하더라도 화면이 튀거나 끌려가는 느낌을 방지함
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_wheelController.hasClients) {
+            int newDisplayIdx = _findDisplayIndex(originalIdx);
+            _wheelController.jumpToItem(newDisplayIdx);
+            setState(() => _selectedDisplayIndex = newDisplayIdx);
+          }
         });
 
         if (widget.driveService != null) {

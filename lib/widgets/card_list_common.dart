@@ -102,48 +102,48 @@ class CardListUtils {
     final query = searchQuery.toLowerCase();
     List<dynamic> result = [];
 
-    if (query.isNotEmpty) {
-      for (int i = 0; i < allCards.length; i++) {
-        final card = allCards[i];
-        if (card.front.toLowerCase().contains(query) ||
+    bool skippingMode = false;
+    int skipDepth = 0;
+
+    for (int i = 0; i < allCards.length; i++) {
+      final card = allCards[i];
+      final bool isParent = checkHasChildren(i, allCards);
+      final bool isCurrentTarget = (i == currentTargetIndex);
+
+      // 검색 필터링
+      if (query.isNotEmpty) {
+        if (!(card.front.toLowerCase().contains(query) ||
             card.back.toLowerCase().contains(query) ||
-            card.key.toLowerCase().contains(query)) {
-          result.add(card);
+            card.key.toLowerCase().contains(query))) {
+          continue;
+        }
+      } else {
+        // 접기 로직
+        if (skippingMode) {
+          if (card.groupDepth > skipDepth) {
+            if (!isCurrentTarget) continue;
+          } else {
+            skippingMode = false;
+          }
         }
       }
-    } else {
-      bool skippingMode = false;
-      int skipDepth = 0;
 
-      for (int i = 0; i < allCards.length; i++) {
-        final card = allCards[i];
-        final bool isParent = checkHasChildren(i, allCards);
-        final bool isCurrentTarget = (i == currentTargetIndex);
+      // [의도 반영] 부모라면 헤더용 데이터 먼저 추가
+      if (isParent && query.isEmpty) {
+        result.add({
+          'type': 'group_header',
+          'parent': card,
+          'originalIndex': i,
+        });
+      }
 
-        if (isParent) {
-          result.add({
-            'type': 'group_header',
-            'parent': card,
-            'originalIndex': i,
-          });
-        }
+      // 실제 카드 추가
+      result.add(card);
 
-        if (skippingMode) {
-          if (isCurrentTarget) {
-            result.add(card);
-          }
-          if (card.groupDepth > skipDepth) continue;
-          skippingMode = false;
-        }
-
-        if (!isParent || (isParent && !card.isCollapsed)) {
-          result.add(card);
-        }
-
-        if (isParent && card.isCollapsed) {
-          skippingMode = true;
-          skipDepth = card.groupDepth;
-        }
+      // 접힘 모드 활성화
+      if (isParent && card.isCollapsed && query.isEmpty) {
+        skippingMode = true;
+        skipDepth = card.groupDepth;
       }
     }
     return result;
@@ -156,13 +156,11 @@ class CardListUtils {
   }) {
     for (int i = 0; i < displayItems.length; i++) {
       final item = displayItems[i];
-
       if (item is Flashcard && allCards.indexOf(item) == originalIdx) {
         return i;
       }
-
       if (item is Map && item['originalIndex'] == originalIdx) {
-        return i;
+        return i + 1;
       }
     }
     return 0;

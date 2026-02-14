@@ -35,6 +35,7 @@ class Flashcard {
     required int groupStartIndex,
     required int groupEndIndex,
     required int controlGroupDepth,
+    bool isFlaggedFromColor = false, // 배경색 판별 결과 추가
   }) {
     String getVal(int colIdx) {
       if (colIdx >= 0 && colIdx < rowValues.length) {
@@ -48,6 +49,7 @@ class Flashcard {
       back: getVal(set.backColIdx),
       remark: getVal(set.remarkColIdx),
       key: set.keyColIdx != -1 ? getVal(set.keyColIdx) : '',
+      isFlagged: isFlaggedFromColor, // 전달받은 플래그 값 할당
       groupDepth: depth,
       isCollapsed: collapsed,
       groupStartIndex: groupStartIndex,

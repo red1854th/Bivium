@@ -116,42 +116,52 @@ class GoogleDriveService {
     }
   }
 
-  /// 카드 데이터 로드 (접힘 상태 포함)
+  /// 카드 데이터 로드 (배경색 기반 플래그 판별 포함)
   Future<List<Flashcard>> getFlashcards(FlashcardSet set) async {
     final client = await _getAuthenticatedClient();
     if (client == null) return [];
     final sheetsApi = sheets.SheetsApi(client);
 
     try {
-      final basicSpreadsheet = await sheetsApi.spreadsheets.get(
+      // 1. 시트 제목을 먼저 가져옴 (최소한의 메타데이터만 요청)
+      final metadata = await sheetsApi.spreadsheets.get(
         set.sheetId,
-        includeGridData: false,
-      );
-      final targetSheet = basicSpreadsheet.sheets!.firstWhere(
-        (s) => s.properties?.sheetId == set.gid,
-        orElse: () => basicSpreadsheet.sheets![0],
+        $fields: 'sheets.properties',
       );
 
-      final String realTitle = targetSheet.properties?.title ?? "";
+      final targetSheet = metadata.sheets?.firstWhere(
+        (s) => s.properties?.sheetId == set.gid,
+        orElse: () => metadata.sheets![0],
+      );
+
+      // set.gid가 실제 시트 ID와 다르면 (특히 0으로 잘못 설정되었을 경우) 업데이트
+      if (targetSheet?.properties?.sheetId != null &&
+          set.gid != targetSheet!.properties!.sheetId) {
+        set.gid = targetSheet.properties!.sheetId!;
+      }
+
+      final String realTitle = targetSheet?.properties?.title ?? "";
       final String escapedTitle = "'${realTitle.replaceAll("'", "''")}'";
 
+      // 2. 해당 시트의 특정 데이터만 요청 (GridData를 전체가 아닌 해당 시트로 한정)
+      // fields를 사용하여 배경색, 그룹 정보, 숨김 상태만 가져옴으로써 페이로드 크기를 획기적으로 줄임
       final spreadsheet = await sheetsApi.spreadsheets.get(
         set.sheetId,
-        ranges: ["$escapedTitle!A:A"],
         includeGridData: true,
+        ranges: [escapedTitle],
+        $fields:
+            'sheets(rowGroups,data(rowData(values(effectiveFormat/backgroundColor)),rowMetadata(hiddenByUser)))',
       );
 
-      final sheet = spreadsheet.sheets!.firstWhere(
-        (s) => s.properties?.sheetId == set.gid,
-        orElse: () => spreadsheet.sheets![0],
-      );
-
+      final sheet = spreadsheet.sheets![0];
       final rowGroups = sheet.rowGroups ?? [];
       final rowMetadata = sheet.data?.first.rowMetadata ?? [];
+      final rowData = sheet.data?.first.rowData ?? []; // 메타데이터 (배경색 등)
 
+      // 3. 텍스트 값 가져오기
       final response = await sheetsApi.spreadsheets.values.get(
         set.sheetId,
-        "$escapedTitle!A:Z",
+        escapedTitle,
       );
 
       final List<List<Object?>> values = response.values ?? [];
@@ -162,7 +172,26 @@ class GoogleDriveService {
       for (int i = 1; i < values.length; i++) {
         final List<Object?> rowValues = values[i];
 
-        // 1. 이 행이 "속한" 가장 깊은 그룹의 depth (UI 들여쓰기용)
+        // --- 플래그(배경색) 판별 로직 시작 ---
+        bool isFlaggedByColor = false;
+        if (i < rowData.length) {
+          final cells = rowData[i].values;
+          if (cells != null && cells.length > set.frontColIdx) {
+            // Front 열의 배경색 확인
+            final bgColor =
+                cells[set.frontColIdx].effectiveFormat?.backgroundColor;
+            if (bgColor != null) {
+              // 노란색 계열(R:1.0, G:0.98, B:0.77)인지 판별
+              // 오차를 감안하여 Red가 높고 Blue가 낮은지 확인
+              if ((bgColor.red ?? 0) > 0.9 && (bgColor.blue ?? 1.0) < 0.85) {
+                isFlaggedByColor = true;
+              }
+            }
+          }
+        }
+        // --- 플래그 판별 로직 끝 ---
+
+        // 1. 이 행이 "속한" 가장 깊은 그룹의 depth
         int memberDepth = 0;
         for (var group in rowGroups) {
           final start = group.range?.startIndex ?? 0;
@@ -174,8 +203,6 @@ class GoogleDriveService {
         }
 
         // 2. 이 행이 parent로서 "컨트롤하는" 그룹 찾기
-        //    Google Sheets에서 parent 행은 그룹 range 바로 앞에 위치 (startIndex - 1)
-        //    따라서 startIndex == i + 1인 그룹을 찾으면 됨
         int controlStart = i;
         int controlEnd = i + 1;
         int controlDepth = 0;
@@ -185,7 +212,6 @@ class GoogleDriveService {
           final end = group.range?.endIndex ?? 0;
           final d = group.depth ?? 0;
           if (start == i + 1) {
-            // 여러 그룹이 같은 startIndex를 가질 수 있으므로 가장 얕은 depth 선택
             if (!foundControl || d < controlDepth) {
               controlStart = start;
               controlEnd = end;
@@ -195,7 +221,6 @@ class GoogleDriveService {
           }
         }
 
-        // isCollapsedBySheet 판별 로직 (동일)
         bool isCollapsedBySheet = false;
         if (i + 1 < rowMetadata.length) {
           if (rowMetadata[i + 1].hiddenByUser == true) {
@@ -206,13 +231,14 @@ class GoogleDriveService {
         cards.add(
           Flashcard.fromGridData(
             rowValues: rowValues,
-            depth: memberDepth, // UI 들여쓰기용 (이 행이 속한 그룹의 depth)
+            depth: memberDepth,
             collapsed: isCollapsedBySheet,
             set: set,
             rowIndex: i,
-            groupStartIndex: controlStart, // parent가 컨트롤하는 그룹의 range
+            groupStartIndex: controlStart,
             groupEndIndex: controlEnd,
-            controlGroupDepth: controlDepth, // parent가 컨트롤하는 그룹의 depth (API용)
+            controlGroupDepth: controlDepth,
+            isFlaggedFromColor: isFlaggedByColor, // 수정한 Flashcard 모델에 전달
           ),
         );
       }
@@ -229,7 +255,7 @@ class GoogleDriveService {
     required int startIndex,
     required int endIndex,
     required bool collapse,
-    required int depth, // 이 값이 실제 해당 하위 그룹의 depth와 일치해야 합니다.
+    required int depth,
   }) async {
     final client = await _getAuthenticatedClient();
     if (client == null) return;
@@ -247,9 +273,8 @@ class GoogleDriveService {
                 endIndex: endIndex,
               ),
               collapsed: collapse,
-              depth: depth, // 정확한 depth 지정이 핵심입니다.
+              depth: depth,
             ),
-            // 명시적으로 collapsed 필드만 업데이트하도록 설정
             fields: "collapsed",
           ),
         ),
@@ -263,21 +288,45 @@ class GoogleDriveService {
     }
   }
 
-  /// 헤더 가져오기
-  Future<List<String>> getSpreadsheetHeaders(String spreadsheetId) async {
+  /// 시트 정보(헤더, GID, 제목) 가져오기
+  Future<({List<String> headers, int gid, String title})?> getSpreadsheetInfo(
+    String spreadsheetId,
+  ) async {
     final client = await _getAuthenticatedClient();
-    if (client == null) return [];
+    if (client == null) return null;
     final sheetsApi = sheets.SheetsApi(client);
     try {
+      // 1. 시트 메타데이터 로드 (첫 번째 시트의 GID와 제목 확인)
+      final spreadsheet = await sheetsApi.spreadsheets.get(
+        spreadsheetId,
+        $fields: 'sheets.properties',
+      );
+      if (spreadsheet.sheets == null || spreadsheet.sheets!.isEmpty) {
+        return null;
+      }
+
+      final firstSheet = spreadsheet.sheets![0].properties!;
+      final int gid = firstSheet.sheetId ?? 0;
+      final String title = firstSheet.title ?? "";
+
+      // 2. 해당 시트의 헤더 가져오기
+      final String escapedTitle = "'${title.replaceAll("'", "''")}'";
       final response = await sheetsApi.spreadsheets.values.get(
         spreadsheetId,
-        'A1:ZZ1',
+        '$escapedTitle!1:1',
       );
-      if (response.values == null || response.values!.isEmpty) return [];
-      return response.values![0].map((cell) => cell.toString()).toList();
+
+      final List<String> headers = [];
+      if (response.values != null && response.values!.isNotEmpty) {
+        headers.addAll(
+          response.values![0].map((cell) => cell.toString()).toList(),
+        );
+      }
+
+      return (headers: headers, gid: gid, title: title);
     } catch (e) {
-      debugPrint('헤더 로드 실패: $e');
-      return [];
+      debugPrint('시트 정보 로드 실패: $e');
+      return null;
     }
   }
 
@@ -332,7 +381,7 @@ class GoogleDriveService {
           cardIndex,
           setInfo.backColIdx,
           card.back,
-          color,
+          null, // 후면(back) 컬럼에는 색상을 적용하지 않음
         ),
       ],
     );
@@ -377,7 +426,7 @@ class GoogleDriveService {
       ),
     );
   }
-} // GoogleDriveService 클래스 끝
+}
 
 class GoogleAuthClient extends http.BaseClient {
   final Map<String, String> _headers;
