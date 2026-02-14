@@ -150,7 +150,7 @@ class GoogleDriveService {
         includeGridData: true,
         ranges: [escapedTitle],
         $fields:
-            'sheets(rowGroups,data(rowData(values(effectiveFormat/backgroundColor)),rowMetadata(hiddenByUser)))',
+            'sheets(rowGroups,data(rowData(values(effectiveFormat(backgroundColor,backgroundColorStyle))),rowMetadata(hiddenByUser)))',
       );
 
       final sheet = spreadsheet.sheets![0];

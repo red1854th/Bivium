@@ -35,7 +35,7 @@ class _ItemsTabState extends State<ItemsTab> {
   final TextEditingController _searchController = TextEditingController();
 
   List<dynamic> _displayItems = [];
-  final double _itemExtent = 85.0;
+  final double _itemExtent = 95.0;
   int _selectedDisplayIndex = 0;
 
   @override
@@ -274,28 +274,105 @@ class _ItemsTabState extends State<ItemsTab> {
   }
 
   Widget _buildFolderHeader(Flashcard parent, int index, bool isDark) {
+    final int originalIdx = widget.cards.indexOf(parent);
+    final Color idleBtnColor = isDark
+        ? Colors.white.withValues(alpha: 0.05)
+        : Colors.black.withValues(alpha: 0.05);
+
     return FlashcardFolderHeader(
       parent: parent,
       index: index,
+      originalIndex: originalIdx,
       isSelected: _selectedDisplayIndex == index,
       isDark: isDark,
-      onTap: () async {
-        // 1. 현재 클릭한 폴더의 원본 인덱스 저장
-        final int originalIdx = widget.cards.indexOf(parent);
+      onTap: () => _goToEditPage(originalIdx), // 바디 클릭: 편집기로 이동
+      actions: [
+        // Remark 버튼
+        Material(
+          color: parent.remark.isNotEmpty
+              ? AppColors.cBrand600.withValues(alpha: 0.15)
+              : idleBtnColor,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            onTap: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => RemarkPage(
+                    service: widget.driveService!,
+                    spreadsheetId: widget.setInfo.sheetId,
+                    cardIndex: originalIdx,
+                    columnIdx: widget.setInfo.remarkColIdx,
+                    initialRemark: parent.remark,
+                  ),
+                ),
+              );
+              if (result != null && result is String) {
+                setState(() {
+                  parent.remark = result;
+                });
+                widget.onCardsUpdated?.call(widget.cards, originalIdx);
+              }
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Icon(
+                Icons.history_edu_rounded,
+                size: 20,
+                color: parent.remark.isNotEmpty
+                    ? AppColors.cBrand600
+                    : (isDark ? Colors.white38 : Colors.grey),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        // Flag 버튼
+        Material(
+          color: parent.isFlagged
+              ? Colors.orange.withValues(alpha: 0.15)
+              : idleBtnColor,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            onTap: () async {
+              setState(() {
+                parent.isFlagged = !parent.isFlagged;
+              });
 
+              if (widget.driveService != null) {
+                try {
+                  await widget.driveService!.updateFlashcard(
+                    spreadsheetId: widget.setInfo.sheetId,
+                    cardIndex: originalIdx,
+                    setInfo: widget.setInfo,
+                    card: parent,
+                  );
+                  widget.onCardsUpdated?.call(widget.cards, originalIdx);
+                } catch (e) {
+                  debugPrint('Flag 동기화 실패: $e');
+                }
+              }
+            },
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Icon(
+                parent.isFlagged ? Icons.flag_rounded : Icons.flag_outlined,
+                size: 20,
+                color: parent.isFlagged
+                    ? Colors.orange
+                    : (isDark ? Colors.white38 : Colors.grey),
+              ),
+            ),
+          ),
+        ),
+      ],
+      onToggle: () async {
+        // 아이콘/화살표 클릭: 접기/펼치기 토글
         setState(() {
           parent.isCollapsed = !parent.isCollapsed;
           _updateDisplayItems();
-        });
-
-        // 2. 리스트 갱신 후, 해당 폴더의 새로운 display index를 찾아 즉시 이동
-        // 이를 통해 리스트 길이가 변하더라도 화면이 튀거나 끌려가는 느낌을 방지함
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_wheelController.hasClients) {
-            int newDisplayIdx = _findDisplayIndex(originalIdx);
-            _wheelController.jumpToItem(newDisplayIdx);
-            setState(() => _selectedDisplayIndex = newDisplayIdx);
-          }
         });
 
         if (widget.driveService != null) {
@@ -315,10 +392,6 @@ class _ItemsTabState extends State<ItemsTab> {
             } catch (e) {
               debugPrint('동기화 실패: $e');
             }
-          } else {
-            debugPrint(
-              'Warning: 잘못된 그룹 범위 전송 시도 - ${parent.groupStartIndex}:${parent.groupEndIndex}',
-            );
           }
         }
       },
@@ -347,9 +420,9 @@ class _ItemsTabState extends State<ItemsTab> {
         // Remark 버튼
         Material(
           color: card.remark.isNotEmpty
-              ? AppColors.cBrand600.withValues(alpha: 0.1)
+              ? AppColors.cBrand600.withValues(alpha: 0.15)
               : idleBtnColor,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           child: InkWell(
             onTap: () async {
               final result = await Navigator.push(
@@ -372,26 +445,26 @@ class _ItemsTabState extends State<ItemsTab> {
                 widget.onCardsUpdated?.call(widget.cards, originalIndex);
               }
             },
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             child: Padding(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(8),
               child: Icon(
                 Icons.history_edu_rounded,
-                size: 18,
+                size: 20,
                 color: card.remark.isNotEmpty
                     ? AppColors.cBrand600
-                    : Colors.grey,
+                    : (isDark ? Colors.white38 : Colors.grey),
               ),
             ),
           ),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 6),
         // Flag 버튼
         Material(
           color: card.isFlagged
-              ? Colors.orange.withValues(alpha: 0.1)
+              ? Colors.orange.withValues(alpha: 0.15)
               : idleBtnColor,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           child: InkWell(
             onTap: () async {
               setState(() {
@@ -413,13 +486,15 @@ class _ItemsTabState extends State<ItemsTab> {
                 }
               }
             },
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             child: Padding(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(8),
               child: Icon(
-                card.isFlagged ? Icons.flag : Icons.flag_outlined,
-                size: 18,
-                color: card.isFlagged ? Colors.orange : Colors.grey,
+                card.isFlagged ? Icons.flag_rounded : Icons.flag_outlined,
+                size: 20,
+                color: card.isFlagged
+                    ? Colors.orange
+                    : (isDark ? Colors.white38 : Colors.grey),
               ),
             ),
           ),

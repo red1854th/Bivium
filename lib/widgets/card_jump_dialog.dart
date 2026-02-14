@@ -33,7 +33,7 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
 
   List<dynamic> _displayItems = [];
   double _scrollOffset = 0.0;
-  final double _itemExtent = 85.0;
+  final double _itemExtent = 95.0;
   int _selectedDisplayIndex = 0;
   bool _hasChanges = false; // 폴더 접기/펼치기 변경사항 추적
 
@@ -205,6 +205,7 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
   }
 
   Widget _buildFolderHeader(Flashcard parent, int index, bool isDark) {
+    final int originalIdx = widget.cards.indexOf(parent);
     double offset = _wheelController.hasClients
         ? (_wheelController.selectedItem - index).abs().toDouble()
         : 0.0;
@@ -212,18 +213,18 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
     return FlashcardFolderHeader(
       parent: parent,
       index: index,
+      originalIndex: originalIdx,
       isSelected: _selectedDisplayIndex == index,
       isDark: isDark,
       scale: math.max(0.85, 1.0 - (offset * 0.05)),
       opacity: math.max(0.4, 1.0 - (offset * 0.2)),
-      trailing: Icon(
-        parent.isCollapsed
-            ? Icons.chevron_right_rounded
-            : Icons.expand_more_rounded,
-        color: Colors.grey,
-        size: 20,
-      ),
-      onTap: () async {
+      onTap: () {
+        // 바디 클릭: 해당 카드로 이동하며 다이얼로그 닫기
+        Navigator.pop(context, _hasChanges);
+        widget.onCardSelected(originalIdx);
+      },
+      onToggle: () async {
+        // 아이콘/화살표 클릭: 접기/펼치기 토글
         setState(() {
           parent.isCollapsed = !parent.isCollapsed;
           _updateDisplayItems();
