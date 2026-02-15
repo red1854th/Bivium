@@ -13,6 +13,7 @@ import 'package:styled_text/styled_text.dart';
 import 'widgets/easter_egg_dialog.dart';
 import 'home_controller.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class HomePage extends StatefulWidget {
   final VoidCallback? onThemeChanged;
@@ -234,7 +235,7 @@ class _HomePageState extends State<HomePage> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Image.asset('assets/icon/app_logo.png', width: 28, height: 28),
+          SvgPicture.asset('assets/icon/app_logo.svg', width: 28, height: 28),
           const SizedBox(width: 12),
           StyledText(
             text: "app_name".tr(),

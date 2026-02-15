@@ -35,7 +35,12 @@ class GoogleDriveService {
     sheets.SheetsApi.spreadsheetsScope,
   ];
 
-  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: _scopes);
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    // GCP 콘솔에서 복사한 '웹용' 클라이언트 ID를 입력하세요.
+    clientId:
+        '1068673942991-r0ee89o9vgeddlpleqq73hp3l9o4e0bg.apps.googleusercontent.com',
+    scopes: _scopes,
+  );
 
   GoogleSignInAccount? get currentUser => _googleSignIn.currentUser;
 

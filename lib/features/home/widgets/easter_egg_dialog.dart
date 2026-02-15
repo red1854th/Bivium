@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/theme.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class EasterEggDialog {
   static int? _lastViewedIndex;
@@ -100,8 +101,8 @@ class EasterEggDialog {
                         onTap: () => setDialogState(
                           () => currentData = getRandomQuote(),
                         ),
-                        child: Image.asset(
-                          'assets/icon/app_logo.png',
+                        child: SvgPicture.asset(
+                          'assets/icon/app_logo.svg',
                           width: 32,
                           height: 32,
                         ),
