@@ -4,26 +4,31 @@ import 'package:shared_preferences/shared_preferences.dart'; // Add this import
 import 'features/home/home_page.dart';
 import 'core/theme.dart';
 import 'core/locales.dart';
-
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase 초기화 코드 추가
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   await EasyLocalization.ensureInitialized();
 
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-  final SharedPreferences prefs =
-      await SharedPreferences.getInstance(); // Initialize once
+  final SharedPreferences prefs = await SharedPreferences.getInstance();
 
   runApp(
     EasyLocalization(
-      supportedLocales: AppLocale.locales, // 통합 관리되는 리스트 사용
+      supportedLocales: AppLocale.locales,
       path: 'assets/localization',
       fallbackLocale: const Locale('en', 'US'),
       child: BiviumApp(prefs: prefs),
     ),
   );
-  FlutterNativeSplash.remove(); // Dismiss splash screen as soon as the app starts rendering
+
+  FlutterNativeSplash.remove();
 }
 
 class BiviumApp extends StatefulWidget {

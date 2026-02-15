@@ -21,6 +21,7 @@ dependencies:
   re_highlight: ^0.0.3
   easy_localization: ^3.0.8
   styled_text: ^9.0.0
+  firebase_core: ^4.4.0
 
 dev_dependencies:
   flutter_test:
