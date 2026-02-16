@@ -3,6 +3,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/flashcard.dart';
 
 class DriveItem {
@@ -35,54 +36,130 @@ class GoogleDriveService {
     sheets.SheetsApi.spreadsheetsScope,
   ];
 
+  static const _isLoggedInKey = 'is_logged_in';
+
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId:
-        '1068673942991-r0ee89o9vgeddlpleqq73hp3l9o4e0bg.apps.googleusercontent.com',
+    clientId: kIsWeb
+        ? '1068673942991-r0ee89o9vgeddlpleqq73hp3l9o4e0bg.apps.googleusercontent.com'
+        : null,
     scopes: _scopes,
   );
 
   GoogleSignInAccount? get currentUser => _googleSignIn.currentUser;
 
-  Future<GoogleSignInAccount?> signIn() => _googleSignIn.signIn();
-  Future<void> signOut() => _googleSignIn.signOut();
+  /// 진행 중인 로그인 작업 (중복 호출 방지)
+  Future<GoogleSignInAccount?>? _ongoingSignIn;
 
-  /// [핵심 수정] API 호출 직전 토큰 강제 확인 및 헤더 구성
-  Future<http.Client?> _getAuthenticatedClient() async {
-    // 1. 현재 메모리에 사용자가 있는지 확인
-    GoogleSignInAccount? googleUser = _googleSignIn.currentUser;
+  Future<GoogleSignInAccount?> signInSilentlyCheck() async {
+    // 1. 이미 로그인이 완료된 상태라면 즉시 반환
+    if (_googleSignIn.currentUser != null) {
+      return _googleSignIn.currentUser;
+    }
 
-    // 2. 세션 복구도 실패했다면 null 반환 (명시적 로그인 유도하지 않음)
-    if (googleUser == null) return null;
+    // 2. 이미 진행 중인 로그인 요청이 있다면 그 결과를 대기
+    if (_ongoingSignIn != null) {
+      return _ongoingSignIn;
+    }
+
+    // 3. 새로운 로그인 시도 시작 및 추적
+    _ongoingSignIn = _performSignInSilently();
 
     try {
-      // [보강] 웹에서는 authHeaders만 믿지 말고 authentication 객체에서 직접 accessToken을 추출합니다.
-      // 이 과정에서 만료된 토큰이 있다면 패키지가 내부적으로 갱신을 시도합니다.
-      final GoogleSignInAuthentication auth = await googleUser.authentication;
-      final String? accessToken = auth.accessToken;
+      final account = await _ongoingSignIn;
+      return account;
+    } finally {
+      // 완료 후 변수 초기화
+      _ongoingSignIn = null;
+    }
+  }
 
-      if (accessToken == null) {
-        debugPrint("액세스 토큰 확보 실패");
+  Future<GoogleSignInAccount?> _performSignInSilently() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final shouldLogin = prefs.getBool(_isLoggedInKey) ?? false;
+
+      if (!shouldLogin) {
         return null;
       }
 
-      // [보강] Bearer 토큰을 명시적으로 구성하여 401 에러 방지
-      final Map<String, String> headers = {
-        'Authorization': 'Bearer $accessToken',
-        'X-Goog-AuthUser': '0', // 멀티 로그인 대응
-      };
+      final account = await _googleSignIn.signInSilently();
 
-      debugPrint("API 인증 클라이언트 생성 완료");
-      return GoogleAuthClient(headers);
+      if (account != null) {
+        await prefs.setBool(_isLoggedInKey, true);
+      }
+      return account;
     } catch (e) {
-      debugPrint("토큰 갱신 중 에러 발생: $e");
+      debugPrint("조용히 로그인 체크 에러: $e");
       return null;
     }
   }
 
-  /// 폴더 콘텐츠 탐색
+  /// 명시적 로그인 (버튼 클릭 등)
+  Future<GoogleSignInAccount?> signIn() async {
+    try {
+      final account = await _googleSignIn.signIn();
+      if (account != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_isLoggedInKey, true);
+      }
+      return account;
+    } catch (e) {
+      debugPrint("로그인 실패: $e");
+      return null;
+    }
+  }
+
+  /// 로그아웃
+  Future<void> signOut() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_isLoggedInKey);
+
+    try {
+      if (kIsWeb) {
+        // 웹에서는 연결 해제가 더 확실함 (캐시 문제 방지)
+        await _googleSignIn.disconnect();
+      }
+      await _googleSignIn.signOut();
+    } catch (e) {
+      debugPrint("로그아웃 에러: $e");
+    }
+  }
+
+  /// 인증된 HTTP 클라이언트 생성
+  /// 토큰 만료 시 자동 갱신 로직이 포함된 클라이언트를 반환
+  Future<http.Client?> _getAuthenticatedClient() async {
+    GoogleSignInAccount? account = _googleSignIn.currentUser;
+
+    // 계정이 없으면 재시도
+    if (account == null) {
+      account = await signInSilentlyCheck();
+      if (account == null) return null;
+    }
+
+    // 초기 헤더 생성
+    final authHeaders = await account.authHeaders;
+
+    return GoogleAuthClient(authHeaders, _clientRecall);
+  }
+
+  /// 401 발생 시 토큰 갱신을 시도하는 콜백
+  Future<Map<String, String>?> _clientRecall() async {
+    try {
+      // 재로그인 시도 (토큰 갱신)
+      final account = await _googleSignIn.signInSilently();
+      return await account?.authHeaders;
+    } catch (e) {
+      debugPrint("토큰 갱신 실패: $e");
+      return null;
+    }
+  }
+
+  // --- 비즈니스 로직 ---
+
   Future<List<DriveItem>> getFolderContents(String? folderId) async {
     final client = await _getAuthenticatedClient();
     if (client == null) return [];
+
     final driveApi = drive.DriveApi(client);
     try {
       final parentId = folderId ?? 'root';
@@ -112,10 +189,10 @@ class GoogleDriveService {
     }
   }
 
-  /// 스프레드시트 목록 가져오기
   Future<List<SheetFile>> getSpreadsheets() async {
     final client = await _getAuthenticatedClient();
     if (client == null) return [];
+
     final driveApi = drive.DriveApi(client);
     try {
       final fileList = await driveApi.files.list(
@@ -124,9 +201,7 @@ class GoogleDriveService {
         $fields: 'files(id, name, modifiedTime, capabilities(canEdit))',
         orderBy: 'modifiedTime desc',
       );
-
       if (fileList.files == null) return [];
-
       return fileList.files!
           .where((file) => file.capabilities?.canEdit ?? false)
           .map(
@@ -143,25 +218,20 @@ class GoogleDriveService {
     }
   }
 
-  /// 카드 데이터 로드 (배경색 기반 플래그 판별 포함)
   Future<List<Flashcard>> getFlashcards(FlashcardSet set) async {
     final client = await _getAuthenticatedClient();
     if (client == null) return [];
-    final sheetsApi = sheets.SheetsApi(client);
 
+    final sheetsApi = sheets.SheetsApi(client);
     try {
-      // 1. 시트 제목을 먼저 가져옴 (최소한의 메타데이터만 요청)
       final metadata = await sheetsApi.spreadsheets.get(
         set.sheetId,
         $fields: 'sheets.properties',
       );
-
       final targetSheet = metadata.sheets?.firstWhere(
         (s) => s.properties?.sheetId == set.gid,
         orElse: () => metadata.sheets![0],
       );
-
-      // set.gid가 실제 시트 ID와 다르면 (특히 0으로 잘못 설정되었을 경우) 업데이트
       if (targetSheet?.properties?.sheetId != null &&
           set.gid != targetSheet!.properties!.sheetId) {
         set.gid = targetSheet.properties!.sheetId!;
@@ -170,8 +240,6 @@ class GoogleDriveService {
       final String realTitle = targetSheet?.properties?.title ?? "";
       final String escapedTitle = "'${realTitle.replaceAll("'", "''")}'";
 
-      // 2. 해당 시트의 특정 데이터만 요청 (GridData를 전체가 아닌 해당 시트로 한정)
-      // fields를 사용하여 배경색, 그룹 정보, 숨김 상태만 가져옴으로써 페이로드 크기를 획기적으로 줄임
       final spreadsheet = await sheetsApi.spreadsheets.get(
         set.sheetId,
         includeGridData: true,
@@ -183,9 +251,8 @@ class GoogleDriveService {
       final sheet = spreadsheet.sheets![0];
       final rowGroups = sheet.rowGroups ?? [];
       final rowMetadata = sheet.data?.first.rowMetadata ?? [];
-      final rowData = sheet.data?.first.rowData ?? []; // 메타데이터 (배경색 등)
+      final rowData = sheet.data?.first.rowData ?? [];
 
-      // 3. 텍스트 값 가져오기
       final response = await sheetsApi.spreadsheets.values.get(
         set.sheetId,
         escapedTitle,
@@ -195,66 +262,51 @@ class GoogleDriveService {
       if (values.isEmpty) return [];
 
       final List<Flashcard> cards = [];
-
       for (int i = 1; i < values.length; i++) {
         final List<Object?> rowValues = values[i];
-
-        // --- 플래그(배경색) 판별 로직 시작 ---
         bool isFlaggedByColor = false;
+
         if (i < rowData.length) {
           final cells = rowData[i].values;
           if (cells != null && cells.length > set.frontColIdx) {
-            // Front 열의 배경색 확인
             final bgColor = cells[set.frontColIdx]
                 .effectiveFormat
                 ?.backgroundColorStyle
                 ?.rgbColor;
             if (bgColor != null) {
-              // 노란색 계열(R:1.0, G:0.98, B:0.77)인지 판별
-              // 오차를 감안하여 Red가 높고 Blue가 낮은지 확인
               if ((bgColor.red ?? 0) > 0.9 && (bgColor.blue ?? 1.0) < 0.85) {
                 isFlaggedByColor = true;
               }
             }
           }
         }
-        // --- 플래그 판별 로직 끝 ---
 
-        // 1. 이 행이 "속한" 가장 깊은 그룹의 depth
         int memberDepth = 0;
         for (var group in rowGroups) {
           final start = group.range?.startIndex ?? 0;
           final end = group.range?.endIndex ?? 0;
-          final d = group.depth ?? 0;
-          if (i >= start && i < end && d > memberDepth) {
-            memberDepth = d;
+          if (i >= start && i < end && (group.depth ?? 0) > memberDepth) {
+            memberDepth = group.depth!;
           }
         }
 
-        // 2. 이 행이 parent로서 "컨트롤하는" 그룹 찾기
-        int controlStart = i;
-        int controlEnd = i + 1;
-        int controlDepth = 0;
+        int controlStart = i, controlEnd = i + 1, controlDepth = 0;
         bool foundControl = false;
         for (var group in rowGroups) {
-          final start = group.range?.startIndex ?? 0;
-          final end = group.range?.endIndex ?? 0;
-          final d = group.depth ?? 0;
-          if (start == i + 1) {
-            if (!foundControl || d < controlDepth) {
-              controlStart = start;
-              controlEnd = end;
-              controlDepth = d;
+          if ((group.range?.startIndex ?? 0) == i + 1) {
+            if (!foundControl || (group.depth ?? 0) < controlDepth) {
+              controlStart = group.range!.startIndex!;
+              controlEnd = group.range!.endIndex!;
+              controlDepth = group.depth!;
               foundControl = true;
             }
           }
         }
 
         bool isCollapsedBySheet = false;
-        if (i + 1 < rowMetadata.length) {
-          if (rowMetadata[i + 1].hiddenByUser == true) {
-            isCollapsedBySheet = true;
-          }
+        if (i + 1 < rowMetadata.length &&
+            rowMetadata[i + 1].hiddenByUser == true) {
+          isCollapsedBySheet = true;
         }
 
         cards.add(
@@ -267,7 +319,7 @@ class GoogleDriveService {
             groupStartIndex: controlStart,
             groupEndIndex: controlEnd,
             controlGroupDepth: controlDepth,
-            isFlaggedFromColor: isFlaggedByColor, // 수정한 Flashcard 모델에 전달
+            isFlaggedFromColor: isFlaggedByColor,
           ),
         );
       }
@@ -288,8 +340,8 @@ class GoogleDriveService {
   }) async {
     final client = await _getAuthenticatedClient();
     if (client == null) return;
-    final sheetsApi = sheets.SheetsApi(client);
 
+    final sheetsApi = sheets.SheetsApi(client);
     final request = sheets.BatchUpdateSpreadsheetRequest(
       requests: [
         sheets.Request(
@@ -309,7 +361,6 @@ class GoogleDriveService {
         ),
       ],
     );
-
     try {
       await sheetsApi.spreadsheets.batchUpdate(request, spreadsheetId);
     } catch (e) {
@@ -317,15 +368,14 @@ class GoogleDriveService {
     }
   }
 
-  /// 시트 정보(헤더, GID, 제목) 가져오기
   Future<({List<String> headers, int gid, String title})?> getSpreadsheetInfo(
     String spreadsheetId,
   ) async {
     final client = await _getAuthenticatedClient();
     if (client == null) return null;
+
     final sheetsApi = sheets.SheetsApi(client);
     try {
-      // 1. 시트 메타데이터 로드 (첫 번째 시트의 GID와 제목 확인)
       final spreadsheet = await sheetsApi.spreadsheets.get(
         spreadsheetId,
         $fields: 'sheets.properties',
@@ -333,13 +383,11 @@ class GoogleDriveService {
       if (spreadsheet.sheets == null || spreadsheet.sheets!.isEmpty) {
         return null;
       }
-
       final firstSheet = spreadsheet.sheets![0].properties!;
       final int gid = firstSheet.sheetId ?? 0;
       final String title = firstSheet.title ?? "";
-
-      // 2. 해당 시트의 헤더 가져오기
       final String escapedTitle = "'${title.replaceAll("'", "''")}'";
+
       final response = await sheetsApi.spreadsheets.values.get(
         spreadsheetId,
         '$escapedTitle!1:1',
@@ -351,7 +399,6 @@ class GoogleDriveService {
           response.values![0].map((cell) => cell.toString()).toList(),
         );
       }
-
       return (headers: headers, gid: gid, title: title);
     } catch (e) {
       debugPrint('시트 정보 로드 실패: $e');
@@ -359,7 +406,6 @@ class GoogleDriveService {
     }
   }
 
-  /// 특정 셀 업데이트
   Future<void> updateSpreadsheetCell(
     String spreadsheetId,
     String range,
@@ -367,6 +413,7 @@ class GoogleDriveService {
   ) async {
     final client = await _getAuthenticatedClient();
     if (client == null) return;
+
     final sheetsApi = sheets.SheetsApi(client);
     final valueRange = sheets.ValueRange.fromJson({
       'values': [
@@ -381,7 +428,6 @@ class GoogleDriveService {
     );
   }
 
-  /// 카드 데이터 업데이트 (플래그 포함)
   Future<void> updateFlashcard({
     required String spreadsheetId,
     required int cardIndex,
@@ -390,8 +436,8 @@ class GoogleDriveService {
   }) async {
     final client = await _getAuthenticatedClient();
     if (client == null) return;
-    final sheetsApi = sheets.SheetsApi(client);
 
+    final sheetsApi = sheets.SheetsApi(client);
     final color = card.isFlagged
         ? sheets.Color(red: 1.0, green: 0.98, blue: 0.77)
         : sheets.Color(red: 1.0, green: 1.0, blue: 1.0);
@@ -410,7 +456,7 @@ class GoogleDriveService {
           cardIndex,
           setInfo.backColIdx,
           card.back,
-          null, // 후면(back) 컬럼에는 색상을 적용하지 않음
+          null,
         ),
       ],
     );
@@ -457,13 +503,44 @@ class GoogleDriveService {
   }
 }
 
+/// 401 에러 발생 시 토큰 갱신을 시도하는 클라이언트
 class GoogleAuthClient extends http.BaseClient {
   final Map<String, String> _headers;
+  final Future<Map<String, String>?> Function() _refreshCallback;
   final http.Client _client = http.Client();
-  GoogleAuthClient(this._headers);
+
+  GoogleAuthClient(this._headers, this._refreshCallback);
+
   @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) {
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
     request.headers.addAll(_headers);
-    return _client.send(request);
+
+    try {
+      final response = await _client.send(request);
+      if (response.statusCode == 401) {
+        debugPrint("401 발생: 토큰 갱신 시도...");
+        final newHeaders = await _refreshCallback();
+        if (newHeaders != null) {
+          final newRequest = _copyRequest(request);
+          if (newRequest != null) {
+            newRequest.headers.addAll(newHeaders);
+            return await _client.send(newRequest);
+          }
+        }
+      }
+      return response;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  http.BaseRequest? _copyRequest(http.BaseRequest request) {
+    if (request is http.Request) {
+      final newReq = http.Request(request.method, request.url)
+        ..bodyBytes = request.bodyBytes
+        ..encoding = request.encoding;
+      return newReq;
+    }
+    return null;
   }
 }

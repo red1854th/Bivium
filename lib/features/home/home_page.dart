@@ -19,8 +19,16 @@ import '../auth/google_login_page.dart';
 class HomePage extends StatefulWidget {
   final VoidCallback? onThemeChanged;
   final SharedPreferences prefs;
+  final GoogleDriveService driveService;
+  final bool initialAuth; // 추가: main에서 받은 초기 인증 상태
 
-  const HomePage({super.key, required this.prefs, this.onThemeChanged});
+  const HomePage({
+    super.key,
+    required this.prefs,
+    this.onThemeChanged,
+    this.initialAuth = false,
+    required this.driveService,
+  });
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -30,8 +38,12 @@ class _HomePageState extends State<HomePage> {
   late final HomeController _controller;
   late final GoogleDriveService _driveService;
   final TextEditingController _searchController = TextEditingController();
-  bool _isAuthenticated = false;
-  bool _isAuthChecking = true;
+
+  // 기존 bool _isAuthenticated = false; 를 아래처럼 수정
+  late bool _isAuthenticated = widget.initialAuth;
+
+  // 기존 bool _isAuthChecking = true; 를 아래처럼 수정
+  late bool _isAuthChecking = !widget.initialAuth;
 
   @override
   void initState() {
@@ -39,26 +51,76 @@ class _HomePageState extends State<HomePage> {
     _driveService = GoogleDriveService();
     _controller = HomeController(prefs: widget.prefs);
     _controller.addListener(_onControllerChanged);
-    _checkAuth();
-    Future.microtask(() => _controller.loadData());
-  }
 
-  Future<void> _checkAuth() async {
-    final account = _driveService.currentUser;
-    if (mounted) {
-      setState(() {
-        _isAuthenticated = account != null;
-        _isAuthChecking = false;
+    // 수정된 로직: 로그인 의향이 있다면 일단 데이터를 로드(낙관적 UI)하고,
+    // 백그라운드에서 실제 세션 유효성을 확인합니다.
+    if (_isAuthenticated) {
+      _controller.loadData();
+      _driveService.signInSilentlyCheck().then((account) {
+        if (account == null && mounted) {
+          // 세션이 만료되었거나 유효하지 않다면 로그인 페이지로 전환
+          setState(() {
+            _isAuthenticated = false;
+          });
+        }
       });
+    } else {
+      _checkAuth();
     }
   }
 
+  /// [수정] 앱 실행 시 조용히 로그인을 시도하여 세션을 복구합니다.
+  Future<void> _checkAuth() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isAuthChecking = true;
+    });
+
+    try {
+      // 1. 기존 로컬 토큰 확인 및 안드로이드 계정 자동 로그인 시도
+      final account = await _driveService.signInSilentlyCheck();
+
+      // 2. 계정이 확인되면 인증된 것으로 간주
+      if (account != null) {
+        if (mounted) {
+          setState(() {
+            _isAuthenticated = true;
+          });
+        }
+        // 3. 인증 성공 시 데이터 로드
+        await _controller.loadData();
+      } else {
+        // 인증 실패 시 로그인 페이지로 유도
+        if (mounted) {
+          setState(() {
+            _isAuthenticated = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("인증 확인 중 오류 발생: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAuthChecking = false;
+        });
+      }
+    }
+  }
+
+  /// [수정] 수동 로그인 핸들러
   Future<void> _handleLogin() async {
-    final account = await _driveService.signIn();
-    if (account != null && mounted) {
-      setState(() {
-        _isAuthenticated = true;
-      });
+    try {
+      final account = await _driveService.signIn();
+      if (account != null && mounted) {
+        setState(() {
+          _isAuthenticated = true;
+        });
+        await _controller.loadData();
+      }
+    } catch (e) {
+      debugPrint("로그인 에러: $e");
     }
   }
 
@@ -348,16 +410,20 @@ class _HomePageState extends State<HomePage> {
               Icons.settings_outlined,
               color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
             ),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => SettingPage(
-                  service: _driveService,
-                  onThemeChanged: widget.onThemeChanged,
-                  prefs: widget.prefs,
+            onPressed: () async {
+              // 설정 페이지 이동 후 돌아왔을 때 인증 상태를 다시 확인합니다.
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SettingPage(
+                    service: _driveService,
+                    onThemeChanged: widget.onThemeChanged,
+                    prefs: widget.prefs,
+                  ),
                 ),
-              ),
-            ).then((_) => _checkAuth()),
+              );
+              _checkAuth();
+            },
           ),
       ],
     );

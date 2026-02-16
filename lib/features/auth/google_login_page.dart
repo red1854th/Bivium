@@ -3,10 +3,29 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/theme.dart';
 
-class GoogleLoginPage extends StatelessWidget {
+class GoogleLoginPage extends StatefulWidget {
   final VoidCallback onLoginPressed;
 
   const GoogleLoginPage({super.key, required this.onLoginPressed});
+
+  @override
+  State<GoogleLoginPage> createState() => _GoogleLoginPageState();
+}
+
+class _GoogleLoginPageState extends State<GoogleLoginPage> {
+  bool _isLoading = false; // 로딩 상태 추가
+
+  void _handlePress() {
+    if (_isLoading) return;
+
+    setState(() => _isLoading = true);
+    widget.onLoginPressed();
+
+    // 비정상적인 중단 상황을 대비해 일정 시간 후 로딩 해제 (옵션)
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _isLoading = false);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,11 +40,11 @@ class GoogleLoginPage extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Spacer(),
-              // Logo or Icon
+              // Logo
               Container(
                 width: 100,
                 height: 100,
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: AppColors.cBrand50.withValues(
                     alpha: isDark ? 0.1 : 1.0,
@@ -54,13 +73,12 @@ class GoogleLoginPage extends StatelessWidget {
               const SizedBox(height: 12),
               // Welcome Message
               Text(
-                "welcome_message"
-                    .tr(), // We might need to add this to localization
+                "welcome_message".tr(),
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 15,
                   color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
-                  height: 1.5,
+                  height: 1.6,
                 ),
               ),
               const Spacer(),
@@ -69,29 +87,43 @@ class GoogleLoginPage extends StatelessWidget {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: onLoginPressed,
+                  onPressed: _isLoading ? null : _handlePress,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.cBrand600,
+                    backgroundColor: _isLoading
+                        ? AppColors.cSlate300
+                        : AppColors.cBrand600,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.login_rounded),
-                      const SizedBox(width: 12),
-                      Text(
-                        'sign_in_with_google'.tr(),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // 가능하면 Google G 로고 SVG를 사용하는 것을 추천드립니다.
+                            const Icon(Icons.login_rounded),
+                            const SizedBox(width: 12),
+                            Text(
+                              'sign_in_with_google'.tr(),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
               const SizedBox(height: 48),
