@@ -81,5 +81,9 @@
     "sheet_url_label": "Google 表格 URL 或 ID",
     "sheet_input_help": "输入 Google 表格 URL 以打开配置界面。",
     "new_project": "新项目",
-    "language_settings": "语言设置"
+    "language_settings": "语言设置",
+    "recent": "最近的项目",
+    "all_projects": "项目",
+    "search_results": "搜索结果",
+    "welcome_message": "“Traduttore, traditore” - '译者即逆者'"
 }

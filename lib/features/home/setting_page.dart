@@ -39,7 +39,7 @@ class _SettingPageState extends State<SettingPage> {
 
   Future<void> _loadAccount() async {
     setState(() => _isLoading = true);
-    final account = await widget.service.signInSilently();
+    final account = widget.service.currentUser;
     setState(() {
       _account = account;
       _isLoading = false;

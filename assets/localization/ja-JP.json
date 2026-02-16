@@ -81,5 +81,9 @@
     "sheet_url_label": "Google スプレッドシートのURLまたはID",
     "sheet_input_help": "URLを入力すると設定画面が開きます。",
     "new_project": "新規プロジェクト",
-    "language_settings": "言語設定"
+    "language_settings": "言語設定",
+    "recent": "最近の項目",
+    "all_projects": "プロジェクト",
+    "search_results": "検索結果",
+    "welcome_message": "“Traduttore, traditore” - '翻訳者は反逆者だ'"
 }

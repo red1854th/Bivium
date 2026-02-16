@@ -14,6 +14,7 @@ import 'widgets/easter_egg_dialog.dart';
 import 'home_controller.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../auth/google_login_page.dart';
 
 class HomePage extends StatefulWidget {
   final VoidCallback? onThemeChanged;
@@ -29,6 +30,8 @@ class _HomePageState extends State<HomePage> {
   late final HomeController _controller;
   late final GoogleDriveService _driveService;
   final TextEditingController _searchController = TextEditingController();
+  bool _isAuthenticated = false;
+  bool _isAuthChecking = true;
 
   @override
   void initState() {
@@ -36,7 +39,27 @@ class _HomePageState extends State<HomePage> {
     _driveService = GoogleDriveService();
     _controller = HomeController(prefs: widget.prefs);
     _controller.addListener(_onControllerChanged);
+    _checkAuth();
     Future.microtask(() => _controller.loadData());
+  }
+
+  Future<void> _checkAuth() async {
+    final account = _driveService.currentUser;
+    if (mounted) {
+      setState(() {
+        _isAuthenticated = account != null;
+        _isAuthChecking = false;
+      });
+    }
+  }
+
+  Future<void> _handleLogin() async {
+    final account = await _driveService.signIn();
+    if (account != null && mounted) {
+      setState(() {
+        _isAuthenticated = true;
+      });
+    }
   }
 
   @override
@@ -62,6 +85,17 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (_isAuthChecking) {
+      return Scaffold(
+        backgroundColor: ThemeService.getBackgroundColor(isDark),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_isAuthenticated) {
+      return GoogleLoginPage(onLoginPressed: _handleLogin);
+    }
 
     return Scaffold(
       backgroundColor: ThemeService.getBackgroundColor(isDark),
@@ -323,7 +357,7 @@ class _HomePageState extends State<HomePage> {
                   prefs: widget.prefs,
                 ),
               ),
-            ),
+            ).then((_) => _checkAuth()),
           ),
       ],
     );

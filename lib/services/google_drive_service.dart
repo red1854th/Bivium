@@ -36,7 +36,6 @@ class GoogleDriveService {
   ];
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    // GCP 콘솔에서 복사한 '웹용' 클라이언트 ID를 입력하세요.
     clientId:
         '1068673942991-r0ee89o9vgeddlpleqq73hp3l9o4e0bg.apps.googleusercontent.com',
     scopes: _scopes,
@@ -44,17 +43,40 @@ class GoogleDriveService {
 
   GoogleSignInAccount? get currentUser => _googleSignIn.currentUser;
 
-  Future<GoogleSignInAccount?> signInSilently() =>
-      _googleSignIn.signInSilently();
   Future<GoogleSignInAccount?> signIn() => _googleSignIn.signIn();
   Future<void> signOut() => _googleSignIn.signOut();
 
+  /// [핵심 수정] API 호출 직전 토큰 강제 확인 및 헤더 구성
   Future<http.Client?> _getAuthenticatedClient() async {
-    GoogleSignInAccount? googleUser =
-        await _googleSignIn.signInSilently() ?? await _googleSignIn.signIn();
+    // 1. 현재 메모리에 사용자가 있는지 확인
+    GoogleSignInAccount? googleUser = _googleSignIn.currentUser;
+
+    // 2. 세션 복구도 실패했다면 null 반환 (명시적 로그인 유도하지 않음)
     if (googleUser == null) return null;
-    final headers = await googleUser.authHeaders;
-    return GoogleAuthClient(headers);
+
+    try {
+      // [보강] 웹에서는 authHeaders만 믿지 말고 authentication 객체에서 직접 accessToken을 추출합니다.
+      // 이 과정에서 만료된 토큰이 있다면 패키지가 내부적으로 갱신을 시도합니다.
+      final GoogleSignInAuthentication auth = await googleUser.authentication;
+      final String? accessToken = auth.accessToken;
+
+      if (accessToken == null) {
+        debugPrint("액세스 토큰 확보 실패");
+        return null;
+      }
+
+      // [보강] Bearer 토큰을 명시적으로 구성하여 401 에러 방지
+      final Map<String, String> headers = {
+        'Authorization': 'Bearer $accessToken',
+        'X-Goog-AuthUser': '0', // 멀티 로그인 대응
+      };
+
+      debugPrint("API 인증 클라이언트 생성 완료");
+      return GoogleAuthClient(headers);
+    } catch (e) {
+      debugPrint("토큰 갱신 중 에러 발생: $e");
+      return null;
+    }
   }
 
   /// 폴더 콘텐츠 탐색

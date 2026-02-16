@@ -145,7 +145,9 @@ class _AddSetDialogState extends State<AddSetDialog> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: widget.driveService == null
+                  onPressed:
+                      (widget.driveService == null ||
+                          widget.driveService!.currentUser == null)
                       ? () {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text('sign_in_required'.tr())),
