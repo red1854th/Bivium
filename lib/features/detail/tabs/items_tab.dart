@@ -38,6 +38,8 @@ class _ItemsTabState extends State<ItemsTab> {
   List<dynamic> _displayItems = [];
   final double _itemExtent = 95.0;
   int _selectedDisplayIndex = 0;
+  int _currentCardIndex = 0;
+  int _exceptionIndex = 0;
 
   @override
   void initState() {
@@ -54,6 +56,8 @@ class _ItemsTabState extends State<ItemsTab> {
     _updateDisplayItems();
 
     int initialIdx = _findDisplayIndex(widget.currentPageIndex);
+    _currentCardIndex = widget.currentPageIndex;
+    _exceptionIndex = widget.currentPageIndex;
     _selectedDisplayIndex = initialIdx;
     _wheelController = FixedExtentScrollController(initialItem: initialIdx);
 
@@ -91,7 +95,12 @@ class _ItemsTabState extends State<ItemsTab> {
 
     // 부모로부터 인덱스가 직접적으로 변경된 경우 (예: 통계 탭 점프)
     if (widget.currentPageIndex != oldWidget.currentPageIndex) {
-      _navigateToCard(widget.currentPageIndex);
+      // 외부에서 점프를 요청한 경우에만 예외 인덱스 갱신 (스크롤로 인한 변경은 무시하여 리스트 안정성 유지)
+      if (widget.currentPageIndex != _currentCardIndex) {
+        _exceptionIndex = widget.currentPageIndex;
+        _currentCardIndex = widget.currentPageIndex;
+        _navigateToCard(widget.currentPageIndex);
+      }
     }
   }
 
@@ -131,7 +140,8 @@ class _ItemsTabState extends State<ItemsTab> {
       _displayItems = CardListUtils.getDisplayItems(
         allCards: widget.cards,
         searchQuery: _searchController.text,
-        currentTargetIndex: targetIndex ?? widget.currentPageIndex,
+        // targetIndex가 명시되면(예: 편집후 리턴) 그것을 사용, 아니면 안정된 예외 인덱스 사용
+        currentTargetIndex: targetIndex ?? _exceptionIndex,
       );
     });
   }
@@ -235,9 +245,9 @@ class _ItemsTabState extends State<ItemsTab> {
                                 // 현재 선택된 리스트 아이템이 Flashcard인 경우 원본 인덱스 추출하여 부모에 알림
                                 final item = _displayItems[index];
                                 if (item is Flashcard) {
-                                  widget.onCardSelected(
-                                    widget.cards.indexOf(item),
-                                  );
+                                  final idx = widget.cards.indexOf(item);
+                                  _currentCardIndex = idx;
+                                  widget.onCardSelected(idx);
                                 }
                               },
                               childDelegate: ListWheelChildBuilderDelegate(
@@ -563,6 +573,8 @@ class _ItemsTabState extends State<ItemsTab> {
         result['cards'],
       );
       final int lastIdx = result['lastIndex'];
+      _currentCardIndex = lastIdx;
+      _exceptionIndex = lastIdx;
 
       // 데이터 갱신 알림
       widget.onCardsUpdated?.call(updatedCards, lastIdx);

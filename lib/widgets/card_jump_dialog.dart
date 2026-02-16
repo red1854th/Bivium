@@ -53,9 +53,23 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
 
     int initialIdx = _findDisplayIndex(widget.currentPageIndex);
     _wheelController = FixedExtentScrollController(initialItem: initialIdx);
-    _scrollOffset = initialIdx.toDouble();
+
+    // 비율로 초기화 (0.0 ~ 1.0)
+    if (_displayItems.length > 1) {
+      _scrollOffset = initialIdx / (_displayItems.length - 1);
+    } else {
+      _scrollOffset = 0.0;
+    }
+
     _selectedDisplayIndex = initialIdx;
     _wheelController.addListener(_scrollListener);
+
+    // 처음 열릴 때 Painter가 즉시 그려지도록 강제 업데이트
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _scrollListener();
+      }
+    });
   }
 
   void _onSearchManagerChanged() {
@@ -76,7 +90,15 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
   void _scrollListener() {
     if (_wheelController.hasClients) {
       setState(() {
-        _scrollOffset = _wheelController.offset / _itemExtent;
+        // 단순히 offset / itemExtent를 하면 소수점이 발생하여
+        // 마지막 아이템에서 정확히 1.0(100%)에 도달하지 못할 수 있습니다.
+        // 실제 최대 스크롤 가능 범위로 나누어 비율을 구합니다.
+        double maxScroll = (_displayItems.length - 1) * _itemExtent;
+        if (maxScroll <= 0) {
+          _scrollOffset = 0.0;
+        } else {
+          _scrollOffset = (_wheelController.offset / maxScroll).clamp(0.0, 1.0);
+        }
       });
     }
   }
@@ -122,7 +144,11 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
 
   void _updateScrollPosition(Offset localPosition, double trackHeight) {
     if (_displayItems.length <= 1) return;
-    final double percentage = (localPosition.dy / trackHeight).clamp(0.0, 1.0);
+    final double activeRange = trackHeight / 1.3;
+    final double center = trackHeight / 2;
+
+    double relativeDy = localPosition.dy - (center - activeRange / 2);
+    final double percentage = (relativeDy / activeRange).clamp(0.0, 1.0);
     final int targetIndex = (percentage * (_displayItems.length - 1)).round();
 
     if (_wheelController.hasClients) {
@@ -318,13 +344,14 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
 
   Widget _buildCurveIndicator(bool isDark, double trackHeight) {
     if (_displayItems.isEmpty) return const SizedBox.shrink();
-    final double progress = _displayItems.length > 1
-        ? (_scrollOffset / (_displayItems.length - 1)).clamp(0.0, 1.0)
-        : 0.0;
+
+    // _scrollListener에서 이미 비율로 계산했으므로 progress에 바로 대입
+    final double progress = _scrollOffset;
+
     return CustomPaint(
       size: Size(40, trackHeight),
       painter: HighlightTrackPainter(
-        progress: progress,
+        progress: progress, // 0.0 ~ 1.0
         angleRange: math.pi / 2.2,
         radius: trackHeight * 0.25,
         yRange: trackHeight / 1.8,
