@@ -30,6 +30,7 @@ class _EditCardPageState extends State<EditCardPage> {
   late PageController _pageController;
   late int _currentPageIndex;
   Axis _scrollDirection = Axis.horizontal;
+  bool _isEditorSettingsOpen = false; // 설정창 열림 상태 추적
 
   @override
   void initState() {
@@ -47,7 +48,6 @@ class _EditCardPageState extends State<EditCardPage> {
     super.dispose();
   }
 
-  /// 데이터 변경 사항을 구글 드라이브(시트)에 저장
   void _saveChanges(int index) {
     if (index < 0 || index >= widget.cards.length) return;
     final card = widget.cards[index];
@@ -61,16 +61,11 @@ class _EditCardPageState extends State<EditCardPage> {
         .catchError((e) => debugPrint('${'background_save_failed'.tr()}: $e'));
   }
 
-  /// 이전 화면(DetailPage)으로 돌아갈 때 데이터와 인덱스를 전달
   void _handlePop() {
-    // 키보드 포커스 해제 (먹통 방지 핵심)
     FocusScope.of(context).unfocus();
-
-    // 현재 페이지 변경사항 저장
     _saveChanges(_currentPageIndex);
 
     if (mounted) {
-      // DetailPage의 Navigator.push가 기다리는 결과값(result) 반환
       Navigator.of(
         context,
       ).pop({'cards': widget.cards, 'lastIndex': _currentPageIndex});
@@ -96,7 +91,6 @@ class _EditCardPageState extends State<EditCardPage> {
       },
     );
 
-    // 다이얼로그에서 폴더 접기/펼치기 변경이 있었다면 UI 갱신
     if (hasChanges == true && mounted) {
       setState(() {});
     }
@@ -107,7 +101,7 @@ class _EditCardPageState extends State<EditCardPage> {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
     return PopScope(
-      canPop: false, // 시스템 뒤로가기를 수동으로 제어
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         _handlePop();
@@ -128,7 +122,7 @@ class _EditCardPageState extends State<EditCardPage> {
           ),
           title: InkWell(
             onTap: _showCardJumpDialog,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(50),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: Text(
@@ -164,12 +158,13 @@ class _EditCardPageState extends State<EditCardPage> {
         body: SafeArea(
           child: Stack(
             children: [
+              // [레이어 0] 에디터 페이지 뷰를 아래에 배치
               PageView.builder(
                 controller: _pageController,
                 scrollDirection: _scrollDirection,
                 itemCount: widget.cards.length,
                 onPageChanged: (idx) {
-                  _saveChanges(_currentPageIndex); // 이전 페이지 저장
+                  _saveChanges(_currentPageIndex);
                   if (mounted) setState(() => _currentPageIndex = idx);
                 },
                 itemBuilder: (context, index) {
@@ -190,14 +185,23 @@ class _EditCardPageState extends State<EditCardPage> {
                           cardIndex: index,
                           setInfo: widget.setInfo,
                           driveService: widget.driveService,
+                          onSettingsToggle: (isOpen) {
+                            setState(() {
+                              _isEditorSettingsOpen = isOpen;
+                            });
+                          },
                         ),
                       );
                     },
                   );
                 },
               ),
-              _buildEdgeHandle(isLeft: true),
-              _buildEdgeHandle(isLeft: false),
+
+              // [레이어 1] 이동 핸들을 가장 위에 배치 (에디터 위에서 터치를 가로챔)
+              if (!_isEditorSettingsOpen) ...[
+                _buildEdgeHandle(isLeft: true),
+                _buildEdgeHandle(isLeft: false),
+              ],
             ],
           ),
         ),
@@ -213,8 +217,9 @@ class _EditCardPageState extends State<EditCardPage> {
       bottom: 0,
       width: 40,
       child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
+        behavior: HitTestBehavior.translucent, // 에디터 위의 투명한 영역에서도 터치 감지
         onTap: () {
+          // 키보드가 닫혀있을 때만 작동
           if (MediaQuery.of(context).viewInsets.bottom == 0) {
             if (isLeft && _currentPageIndex > 0) {
               _pageController.previousPage(
