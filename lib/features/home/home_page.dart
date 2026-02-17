@@ -48,7 +48,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _driveService = GoogleDriveService();
+    _driveService = widget.driveService;
     _controller = HomeController(prefs: widget.prefs);
     _controller.addListener(_onControllerChanged);
 
@@ -58,10 +58,10 @@ class _HomePageState extends State<HomePage> {
       _controller.loadData();
       _driveService.signInSilentlyCheck().then((account) {
         if (account == null && mounted) {
-          // 세션이 만료되었거나 유효하지 않다면 로그인 페이지로 전환
-          setState(() {
-            _isAuthenticated = false;
-          });
+          debugPrint("백그라운드 세션 확인 실패 (로그인 유지 시도)");
+          // 더 이상 강제로 _isAuthenticated = false로 전환하지 않습니다.
+          // 실제 데이터 요청 시 401이 발생하면 그때 처리하거나,
+          // currentUser가 null인 상태로 유지되어 필요시 로그인을 요구하게 됩니다.
         }
       });
     } else {

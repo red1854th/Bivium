@@ -27,24 +27,26 @@ class SheetSelectionDialog extends StatefulWidget {
 
 class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
   late TextEditingController _titleController;
+  late TextEditingController _descriptionController;
   List<String> _headers = [];
   bool _loadingHeaders = true;
   int? _keyColIdx;
   int _sourceColIdx = 0;
   int _targetColIdx = 1;
-  int? _remarkColIdx;
   int _gid = 0;
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.sheetName);
+    _descriptionController = TextEditingController();
     _loadHeaders();
   }
 
   @override
   void dispose() {
     _titleController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -136,13 +138,13 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
       FlashcardSet(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: _titleController.text.trim(),
-        description: '',
+        description: _descriptionController.text.trim(),
         sheetId: widget.sheetId,
         gid: _gid,
         frontColIdx: _sourceColIdx,
         backColIdx: _targetColIdx,
         keyColIdx: _keyColIdx ?? -1,
-        remarkColIdx: _remarkColIdx ?? -1,
+        remarkColIdx: -1,
         lastSynced: DateTime.now(),
         lastAccessed: DateTime.now(),
       ),
@@ -183,7 +185,6 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
               controller: _titleController,
               decoration: InputDecoration(
                 labelText: 'title'.tr(),
-
                 labelStyle: TextStyle(
                   color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
                 ),
@@ -199,6 +200,29 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
               style: TextStyle(
                 color: isDark ? Colors.white : AppColors.cSlate900,
               ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _descriptionController,
+              decoration: InputDecoration(
+                labelText: 'description'.tr(),
+                hintText: 'enter_description'.tr(),
+                labelStyle: TextStyle(
+                  color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
+                  ),
+                ),
+                filled: true,
+                fillColor: isDark ? AppColors.cDarkSurface : AppColors.cSlate50,
+              ),
+              style: TextStyle(
+                color: isDark ? Colors.white : AppColors.cSlate900,
+              ),
+              maxLines: 2,
             ),
             const SizedBox(height: 24),
             if (_loadingHeaders)
@@ -238,15 +262,6 @@ class _SheetSelectionDialogState extends State<SheetSelectionDialog> {
                 _targetColIdx,
                 (idx) => setState(() => _targetColIdx = idx),
                 isDark,
-              ),
-              const SizedBox(height: 16),
-              _buildColumnSelector(
-                'remark_col_label'.tr(),
-
-                _remarkColIdx,
-                (idx) => setState(() => _remarkColIdx = idx == -1 ? null : idx),
-                isDark,
-                allowNone: true,
               ),
             ],
             const SizedBox(height: 24),

@@ -177,6 +177,8 @@ class FlashcardFolderHeader extends StatelessWidget {
   final double opacity;
   final VoidCallback? onLongPress;
 
+  final bool isSimple;
+
   const FlashcardFolderHeader({
     super.key,
     required this.parent,
@@ -190,6 +192,7 @@ class FlashcardFolderHeader extends StatelessWidget {
     this.scale = 1.0,
     this.opacity = 1.0,
     this.onLongPress,
+    this.isSimple = false,
   });
 
   @override
@@ -264,145 +267,10 @@ class FlashcardFolderHeader extends StatelessWidget {
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 12.0,
-                                  ), // 상하 여유 공간 추가
-                                  child: Column(
-                                    children: [
-                                      // 1️⃣ 상단 50% 영역
-                                      Expanded(
-                                        child: Align(
-                                          alignment: Alignment
-                                              .bottomLeft, // 위쪽 텍스트를 살짝 아래로
-                                          child: Row(
-                                            children: [
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 7,
-                                                      vertical: 3,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.cBrand600
-                                                      .withValues(alpha: 0.12),
-                                                  borderRadius:
-                                                      BorderRadius.circular(50),
-                                                ),
-                                                child: Text(
-                                                  '#${originalIndex + 1}',
-                                                  style: const TextStyle(
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.w900,
-                                                    color: AppColors.cBrand600,
-                                                    letterSpacing: -0.2,
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 10),
-                                              Expanded(
-                                                child: Padding(
-                                                  padding: EdgeInsets.only(
-                                                    right: hasActions ? 75 : 0,
-                                                  ),
-                                                  child: Text(
-                                                    parent.key,
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: isDark
-                                                          ? AppColors.cSlate400
-                                                          : AppColors.cSlate500,
-                                                      fontFamily: 'monospace',
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                    ),
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                              ),
-                                              if (!hasActions) ...[
-                                                if (parent.remark.isNotEmpty)
-                                                  const Icon(
-                                                    Icons.history_edu_rounded,
-                                                    size: 16,
-                                                    color: AppColors.cBrand600,
-                                                  ),
-                                                if (parent.isFlagged)
-                                                  const Padding(
-                                                    padding: EdgeInsets.only(
-                                                      left: 4,
-                                                    ),
-                                                    child: Icon(
-                                                      Icons.flag_rounded,
-                                                      size: 16,
-                                                      color: Colors.orange,
-                                                    ),
-                                                  ),
-                                              ],
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 10), // 텍스트 간격 조절
-                                      // 2️⃣ 하단 50% 영역
-                                      Expanded(
-                                        child: Align(
-                                          alignment: Alignment
-                                              .topLeft, // 아래쪽 텍스트를 살짝 위로
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  parent.front.replaceAll(
-                                                    '\n',
-                                                    ' ',
-                                                  ),
-                                                  textAlign: TextAlign.right,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: isDark
-                                                        ? Colors.white
-                                                        : AppColors.cSlate900,
-                                                  ),
-                                                ),
-                                              ),
-                                              const Padding(
-                                                padding: EdgeInsets.symmetric(
-                                                  horizontal: 10,
-                                                ),
-                                                child: Text(
-                                                  '|',
-                                                  style: TextStyle(
-                                                    color: Colors.grey,
-                                                  ),
-                                                ),
-                                              ),
-                                              Expanded(
-                                                child: Text(
-                                                  parent.back.replaceAll(
-                                                    '\n',
-                                                    ' ',
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: 14,
-                                                    color: isDark
-                                                        ? AppColors.cSlate300
-                                                        : AppColors.cSlate600,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
                                   ),
+                                  child: isSimple
+                                      ? _buildSimpleLayout(hasActions)
+                                      : _buildDefaultLayout(hasActions),
                                 ),
                               ),
                             ],
@@ -428,6 +296,191 @@ class FlashcardFolderHeader extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildIndexBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.cBrand600.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(50),
+      ),
+      child: Text(
+        '#${originalIndex + 1}',
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          color: AppColors.cBrand600,
+          letterSpacing: -0.2,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDefaultLayout(bool hasActions) {
+    return Column(
+      children: [
+        // 1️⃣ 상단 50% 영역 (Index + Key)
+        Expanded(
+          child: Align(
+            alignment: Alignment.bottomLeft,
+            child: Row(
+              children: [
+                _buildIndexBadge(),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: hasActions ? 75 : 0),
+                    child: Text(
+                      parent.key,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark
+                            ? AppColors.cSlate400
+                            : AppColors.cSlate500,
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                if (!hasActions) ...[
+                  if (parent.remark.isNotEmpty)
+                    const Icon(
+                      Icons.history_edu_rounded,
+                      size: 16,
+                      color: AppColors.cBrand600,
+                    ),
+                  if (parent.isFlagged)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 4),
+                      child: Icon(
+                        Icons.flag_rounded,
+                        size: 16,
+                        color: Colors.orange,
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        // 2️⃣ 하단 50% 영역 (Front | Back)
+        Expanded(
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    parent.front.replaceAll('\n', ' '),
+                    textAlign: TextAlign.right,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : AppColors.cSlate900,
+                    ),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('|', style: TextStyle(color: Colors.grey)),
+                ),
+                Expanded(
+                  child: Text(
+                    parent.back.replaceAll('\n', ' '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? AppColors.cSlate300 : AppColors.cSlate600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSimpleLayout(bool hasActions) {
+    const double indexWidth = 48.0;
+    const double spacing = 0.0;
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1️⃣ 상단 Row (Index + Front + Icons)
+        Row(
+          children: [
+            SizedBox(
+              width: indexWidth,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _buildIndexBadge(),
+              ),
+            ),
+            const SizedBox(width: spacing),
+            Expanded(
+              child: Text(
+                parent.front.replaceAll('\n', ' '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : AppColors.cSlate900,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ),
+            if (!hasActions) ...[
+              if (parent.remark.isNotEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Icon(
+                    Icons.history_edu_rounded,
+                    size: 16,
+                    color: AppColors.cBrand600,
+                  ),
+                ),
+              if (parent.isFlagged)
+                const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Icon(
+                    Icons.flag_rounded,
+                    size: 16,
+                    color: Colors.orange,
+                  ),
+                ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 4),
+        // 2️⃣ 하단 Row (Back) - 위쪽 Front 텍스트와 시작점 일치시킴
+        Padding(
+          padding: const EdgeInsets.only(left: indexWidth + spacing),
+          child: Text(
+            parent.back.replaceAll('\n', ' '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 // --- Widgets: 플래시카드 아이템 ---
@@ -444,6 +497,8 @@ class FlashcardListItem extends StatelessWidget {
   final bool isParent;
   final VoidCallback? onLongPress;
 
+  final bool isSimple;
+
   const FlashcardListItem({
     super.key,
     required this.card,
@@ -457,6 +512,7 @@ class FlashcardListItem extends StatelessWidget {
     this.opacity = 1.0,
     required this.isParent,
     this.onLongPress,
+    this.isSimple = false,
   });
 
   @override
@@ -512,145 +568,10 @@ class FlashcardListItem extends StatelessWidget {
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 12.0,
-                                  ), // 상하 여유 공간 추가
-                                  child: Column(
-                                    children: [
-                                      // 1️⃣ 상단 50% 영역
-                                      Expanded(
-                                        child: Align(
-                                          alignment: Alignment
-                                              .bottomLeft, // 위쪽 텍스트를 살짝 아래로
-                                          child: Row(
-                                            children: [
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 7,
-                                                      vertical: 3,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.cBrand600
-                                                      .withValues(alpha: 0.12),
-                                                  borderRadius:
-                                                      BorderRadius.circular(50),
-                                                ),
-                                                child: Text(
-                                                  '#${originalIndex + 1}',
-                                                  style: const TextStyle(
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.w900,
-                                                    color: AppColors.cBrand600,
-                                                    letterSpacing: -0.2,
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 10),
-                                              Expanded(
-                                                child: Padding(
-                                                  padding: EdgeInsets.only(
-                                                    right: hasActions ? 75 : 0,
-                                                  ),
-                                                  child: Text(
-                                                    card.key,
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: isDark
-                                                          ? AppColors.cSlate400
-                                                          : AppColors.cSlate500,
-                                                      fontFamily: 'monospace',
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                    ),
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
-                                                ),
-                                              ),
-                                              if (!hasActions) ...[
-                                                if (card.remark.isNotEmpty)
-                                                  const Icon(
-                                                    Icons.history_edu_rounded,
-                                                    size: 16,
-                                                    color: AppColors.cBrand600,
-                                                  ),
-                                                if (card.isFlagged)
-                                                  const Padding(
-                                                    padding: EdgeInsets.only(
-                                                      left: 4,
-                                                    ),
-                                                    child: Icon(
-                                                      Icons.flag_rounded,
-                                                      size: 16,
-                                                      color: Colors.orange,
-                                                    ),
-                                                  ),
-                                              ],
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 10), // 텍스트 간격 조절
-                                      // 2️⃣ 하단 50% 영역
-                                      Expanded(
-                                        child: Align(
-                                          alignment: Alignment
-                                              .topLeft, // 아래쪽 텍스트를 살짝 위로
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  card.front.replaceAll(
-                                                    '\n',
-                                                    ' ',
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  textAlign: TextAlign.right,
-                                                  style: TextStyle(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: isDark
-                                                        ? Colors.white
-                                                        : AppColors.cSlate900,
-                                                  ),
-                                                ),
-                                              ),
-                                              const Padding(
-                                                padding: EdgeInsets.symmetric(
-                                                  horizontal: 10,
-                                                ),
-                                                child: Text(
-                                                  '|',
-                                                  style: TextStyle(
-                                                    color: Colors.grey,
-                                                  ),
-                                                ),
-                                              ),
-                                              Expanded(
-                                                child: Text(
-                                                  card.back.replaceAll(
-                                                    '\n',
-                                                    ' ',
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: 14,
-                                                    color: isDark
-                                                        ? AppColors.cSlate300
-                                                        : AppColors.cSlate600,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
                                   ),
+                                  child: isSimple
+                                      ? _buildSimpleLayout(hasActions)
+                                      : _buildDefaultLayout(hasActions),
                                 ),
                               ),
                             ],
@@ -674,6 +595,189 @@ class FlashcardListItem extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildIndexBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.cBrand600.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(50),
+      ),
+      child: Text(
+        '#${originalIndex + 1}',
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          color: AppColors.cBrand600,
+          letterSpacing: -0.2,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDefaultLayout(bool hasActions) {
+    return Column(
+      children: [
+        // 1️⃣ 상단 50% 영역 (Index + Key)
+        Expanded(
+          child: Align(
+            alignment: Alignment.bottomLeft,
+            child: Row(
+              children: [
+                _buildIndexBadge(),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: hasActions ? 75 : 0),
+                    child: Text(
+                      card.key,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark
+                            ? AppColors.cSlate400
+                            : AppColors.cSlate500,
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+                if (!hasActions) ...[
+                  if (card.remark.isNotEmpty)
+                    const Icon(
+                      Icons.history_edu_rounded,
+                      size: 16,
+                      color: AppColors.cBrand600,
+                    ),
+                  if (card.isFlagged)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 4),
+                      child: Icon(
+                        Icons.flag_rounded,
+                        size: 16,
+                        color: Colors.orange,
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        // 2️⃣ 하단 50% 영역 (Front | Back)
+        Expanded(
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    card.front.replaceAll('\n', ' '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : AppColors.cSlate900,
+                    ),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('|', style: TextStyle(color: Colors.grey)),
+                ),
+                Expanded(
+                  child: Text(
+                    card.back.replaceAll('\n', ' '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? AppColors.cSlate300 : AppColors.cSlate600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSimpleLayout(bool hasActions) {
+    const double indexWidth = 48.0;
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1️⃣ 상단 Row (Index + Front + Icons)
+        Row(
+          children: [
+            SizedBox(
+              width: indexWidth,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _buildIndexBadge(),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                card.front.replaceAll('\n', ' '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : AppColors.cSlate900,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ),
+            if (!hasActions) ...[
+              if (card.remark.isNotEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Icon(
+                    Icons.history_edu_rounded,
+                    size: 16,
+                    color: AppColors.cBrand600,
+                  ),
+                ),
+              if (card.isFlagged)
+                const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Icon(
+                    Icons.flag_rounded,
+                    size: 16,
+                    color: Colors.orange,
+                  ),
+                ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 4),
+        // 2️⃣ 하단 Row (Back) - 위쪽 Front 텍스트와 시작점 일치시킴
+        Padding(
+          padding: const EdgeInsets.only(left: indexWidth),
+          child: Text(
+            card.back.replaceAll('\n', ' '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

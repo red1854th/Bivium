@@ -279,6 +279,7 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
       originalIndex: originalIdx,
       isSelected: _selectedDisplayIndex == index,
       isDark: isDark,
+      isSimple: widget.setInfo.keyColIdx == -1,
       scale: math.max(0.85, 1.0 - (offset * 0.05)),
       opacity: math.max(0.4, 1.0 - (offset * 0.2)),
       onTap: () {
@@ -333,6 +334,7 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
       isSelected: _selectedDisplayIndex == index,
       isDark: isDark,
       isParent: _checkHasChildren(originalIndex),
+      isSimple: widget.setInfo.keyColIdx == -1,
       scale: math.max(0.85, 1.0 - (offset * 0.05)),
       opacity: math.max(0.4, 1.0 - (offset * 0.2)),
       onTap: () {

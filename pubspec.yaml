@@ -23,6 +23,7 @@ dependencies:
   styled_text: ^9.0.0
   firebase_core: ^4.4.0
   flutter_svg: ^2.2.3
+  file_picker: ^10.3.10
 
 dev_dependencies:
   flutter_test:

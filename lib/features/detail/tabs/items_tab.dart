@@ -333,6 +333,7 @@ class _ItemsTabState extends State<ItemsTab> {
       originalIndex: originalIdx,
       isSelected: _selectedDisplayIndex == index,
       isDark: isDark,
+      isSimple: widget.setInfo.keyColIdx == -1,
       onTap: () => _goToEditPage(originalIdx), // 바디 클릭: 편집기로 이동
       actions: [
         // Remark 버튼
@@ -463,6 +464,7 @@ class _ItemsTabState extends State<ItemsTab> {
       isSelected: _selectedDisplayIndex == index,
       isDark: isDark,
       isParent: _checkHasChildren(originalIndex),
+      isSimple: widget.setInfo.keyColIdx == -1,
       onTap: () => _goToEditPage(originalIndex),
       actions: [
         // Remark 버튼

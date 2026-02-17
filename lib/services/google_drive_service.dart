@@ -46,29 +46,15 @@ class GoogleDriveService {
   );
 
   GoogleSignInAccount? get currentUser => _googleSignIn.currentUser;
-
-  /// 진행 중인 로그인 작업 (중복 호출 방지)
   Future<GoogleSignInAccount?>? _ongoingSignIn;
 
   Future<GoogleSignInAccount?> signInSilentlyCheck() async {
-    // 1. 이미 로그인이 완료된 상태라면 즉시 반환
-    if (_googleSignIn.currentUser != null) {
-      return _googleSignIn.currentUser;
-    }
-
-    // 2. 이미 진행 중인 로그인 요청이 있다면 그 결과를 대기
-    if (_ongoingSignIn != null) {
-      return _ongoingSignIn;
-    }
-
-    // 3. 새로운 로그인 시도 시작 및 추적
+    if (_googleSignIn.currentUser != null) return _googleSignIn.currentUser;
+    if (_ongoingSignIn != null) return _ongoingSignIn;
     _ongoingSignIn = _performSignInSilently();
-
     try {
-      final account = await _ongoingSignIn;
-      return account;
+      return await _ongoingSignIn;
     } finally {
-      // 완료 후 변수 초기화
       _ongoingSignIn = null;
     }
   }
@@ -76,17 +62,9 @@ class GoogleDriveService {
   Future<GoogleSignInAccount?> _performSignInSilently() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final shouldLogin = prefs.getBool(_isLoggedInKey) ?? false;
-
-      if (!shouldLogin) {
-        return null;
-      }
-
+      if (!(prefs.getBool(_isLoggedInKey) ?? false)) return null;
       final account = await _googleSignIn.signInSilently();
-
-      if (account != null) {
-        await prefs.setBool(_isLoggedInKey, true);
-      }
+      if (account != null) await prefs.setBool(_isLoggedInKey, true);
       return account;
     } catch (e) {
       debugPrint("조용히 로그인 체크 에러: $e");
@@ -94,7 +72,6 @@ class GoogleDriveService {
     }
   }
 
-  /// 명시적 로그인 (버튼 클릭 등)
   Future<GoogleSignInAccount?> signIn() async {
     try {
       final account = await _googleSignIn.signIn();
@@ -109,43 +86,29 @@ class GoogleDriveService {
     }
   }
 
-  /// 로그아웃
   Future<void> signOut() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_isLoggedInKey);
-
     try {
-      if (kIsWeb) {
-        // 웹에서는 연결 해제가 더 확실함 (캐시 문제 방지)
-        await _googleSignIn.disconnect();
-      }
+      if (kIsWeb) await _googleSignIn.disconnect();
       await _googleSignIn.signOut();
     } catch (e) {
       debugPrint("로그아웃 에러: $e");
     }
   }
 
-  /// 인증된 HTTP 클라이언트 생성
-  /// 토큰 만료 시 자동 갱신 로직이 포함된 클라이언트를 반환
   Future<http.Client?> _getAuthenticatedClient() async {
     GoogleSignInAccount? account = _googleSignIn.currentUser;
-
-    // 계정이 없으면 재시도
     if (account == null) {
       account = await signInSilentlyCheck();
       if (account == null) return null;
     }
-
-    // 초기 헤더 생성
     final authHeaders = await account.authHeaders;
-
     return GoogleAuthClient(authHeaders, _clientRecall);
   }
 
-  /// 401 발생 시 토큰 갱신을 시도하는 콜백
   Future<Map<String, String>?> _clientRecall() async {
     try {
-      // 재로그인 시도 (토큰 갱신)
       final account = await _googleSignIn.signInSilently();
       return await account?.authHeaders;
     } catch (e) {
@@ -159,7 +122,6 @@ class GoogleDriveService {
   Future<List<DriveItem>> getFolderContents(String? folderId) async {
     final client = await _getAuthenticatedClient();
     if (client == null) return [];
-
     final driveApi = drive.DriveApi(client);
     try {
       final parentId = folderId ?? 'root';
@@ -170,19 +132,8 @@ class GoogleDriveService {
         $fields: 'files(id, name, mimeType, modifiedTime)',
         orderBy: 'folder,name',
       );
-      if (fileList.files == null) return [];
-      return fileList.files!
-          .map(
-            (file) => DriveItem(
-              id: file.id ?? '',
-              name: file.name ?? 'Untitled',
-              isFolder: file.mimeType == 'application/vnd.google-apps.folder',
-              isSpreadsheet:
-                  file.mimeType == 'application/vnd.google-apps.spreadsheet',
-              modifiedTime: file.modifiedTime ?? DateTime.now(),
-            ),
-          )
-          .toList();
+      return fileList.files?.map((file) => _mapToDriveItem(file)).toList() ??
+          [];
     } catch (e) {
       debugPrint('폴더 탐색 실패: $e');
       return [];
@@ -192,7 +143,6 @@ class GoogleDriveService {
   Future<List<SheetFile>> getSpreadsheets() async {
     final client = await _getAuthenticatedClient();
     if (client == null) return [];
-
     final driveApi = drive.DriveApi(client);
     try {
       final fileList = await driveApi.files.list(
@@ -201,21 +151,76 @@ class GoogleDriveService {
         $fields: 'files(id, name, modifiedTime, capabilities(canEdit))',
         orderBy: 'modifiedTime desc',
       );
-      if (fileList.files == null) return [];
       return fileList.files!
           .where((file) => file.capabilities?.canEdit ?? false)
-          .map(
-            (file) => SheetFile(
-              id: file.id ?? '',
-              name: file.name ?? 'Untitled',
-              modifiedTime: file.modifiedTime ?? DateTime.now(),
-            ),
-          )
+          .map((file) => _mapToSheetFile(file))
           .toList();
     } catch (e) {
       debugPrint('목록 가져오기 실패: $e');
       return [];
     }
+  }
+
+  // --- 검색 로직 추가 ---
+
+  Future<List<DriveItem>> searchAllContents(String searchQuery) async {
+    final client = await _getAuthenticatedClient();
+    if (client == null) return [];
+    final driveApi = drive.DriveApi(client);
+    try {
+      final query = "name contains '$searchQuery' and trashed = false";
+      final fileList = await driveApi.files.list(
+        q: query,
+        pageSize: 50,
+        $fields: 'files(id, name, mimeType, modifiedTime)',
+        orderBy: 'folder,name',
+      );
+      return fileList.files?.map((file) => _mapToDriveItem(file)).toList() ??
+          [];
+    } catch (e) {
+      debugPrint('전체 검색 실패: $e');
+      return [];
+    }
+  }
+
+  Future<List<SheetFile>> searchSpreadsheets(String searchQuery) async {
+    final client = await _getAuthenticatedClient();
+    if (client == null) return [];
+    final driveApi = drive.DriveApi(client);
+    try {
+      final query =
+          "mimeType='application/vnd.google-apps.spreadsheet' and name contains '$searchQuery' and trashed=false";
+      final fileList = await driveApi.files.list(
+        q: query,
+        pageSize: 50,
+        $fields: 'files(id, name, modifiedTime)',
+        orderBy: 'modifiedTime desc',
+      );
+      return fileList.files?.map((file) => _mapToSheetFile(file)).toList() ??
+          [];
+    } catch (e) {
+      debugPrint('시트 검색 실패: $e');
+      return [];
+    }
+  }
+
+  // 매핑 헬퍼
+  DriveItem _mapToDriveItem(drive.File file) {
+    return DriveItem(
+      id: file.id ?? '',
+      name: file.name ?? 'Untitled',
+      isFolder: file.mimeType == 'application/vnd.google-apps.folder',
+      isSpreadsheet: file.mimeType == 'application/vnd.google-apps.spreadsheet',
+      modifiedTime: file.modifiedTime ?? DateTime.now(),
+    );
+  }
+
+  SheetFile _mapToSheetFile(drive.File file) {
+    return SheetFile(
+      id: file.id ?? '',
+      name: file.name ?? 'Untitled',
+      modifiedTime: file.modifiedTime ?? DateTime.now(),
+    );
   }
 
   Future<List<Flashcard>> getFlashcards(FlashcardSet set) async {
@@ -500,6 +505,46 @@ class GoogleDriveService {
             : 'userEnteredValue',
       ),
     );
+  }
+
+  Future<String?> createSpreadsheet(String title) async {
+    final client = await _getAuthenticatedClient();
+    if (client == null) return null;
+
+    final sheetsApi = sheets.SheetsApi(client);
+    try {
+      final spreadsheet = sheets.Spreadsheet(
+        properties: sheets.SpreadsheetProperties(title: title),
+      );
+      final result = await sheetsApi.spreadsheets.create(spreadsheet);
+      return result.spreadsheetId;
+    } catch (e) {
+      debugPrint('시트 생성 실패: $e');
+      return null;
+    }
+  }
+
+  Future<void> uploadInitialData(
+    String spreadsheetId,
+    List<String> headers,
+    List<List<String>> data,
+  ) async {
+    final client = await _getAuthenticatedClient();
+    if (client == null) return;
+
+    final sheetsApi = sheets.SheetsApi(client);
+    try {
+      final List<List<Object?>> values = [headers, ...data];
+      final valueRange = sheets.ValueRange.fromJson({'values': values});
+      await sheetsApi.spreadsheets.values.update(
+        valueRange,
+        spreadsheetId,
+        'A1',
+        valueInputOption: 'USER_ENTERED',
+      );
+    } catch (e) {
+      debugPrint('데이터 업로드 실패: $e');
+    }
   }
 }
 

@@ -8,10 +8,6 @@
     "settings": "設定",
     "add_project": "プロジェクト追加",
     "error_loading_quote": "名言の読み込みに失敗しました",
-    "add_new_set": "新しいセットを追加",
-    "add_set_desc": "Google スプレッドシートのURLを貼り付けるか、ドライブから選択してください。",
-    "enter_sheet_url": "シートのURLを入力",
-    "pick_from_drive": "ドライブから選択",
     "sign_in_required": "ドライブを使用するには設定でGoogleログインが必要です。",
     "dark_mode": "ダークモード",
     "account": "アカウント",
@@ -85,5 +81,6 @@
     "recent": "最近の項目",
     "all_projects": "プロジェクト",
     "search_results": "検索結果",
-    "welcome_message": "“Traduttore, traditore” - '翻訳者は反逆者だ'"
+    "welcome_message": "“Traduttore, traditore” - '翻訳者は反逆者だ'",
+    "search_result_for": "\"{}\"検索結果"
 }

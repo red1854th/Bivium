@@ -124,14 +124,34 @@ class _EditCardPageState extends State<EditCardPage> {
             onTap: _showCardJumpDialog,
             borderRadius: BorderRadius.circular(50),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: Text(
-                '${_currentPageIndex + 1}/${widget.cards.length}',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? AppColors.cSlate200 : AppColors.cSlate800,
-                ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${_currentPageIndex + 1}/${widget.cards.length}',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      height: 1.1,
+                      color: isDark ? AppColors.cSlate200 : AppColors.cSlate800,
+                    ),
+                  ),
+                  if (widget.setInfo.keyColIdx != -1 &&
+                      widget.cards[_currentPageIndex].key.isNotEmpty)
+                    Text(
+                      widget.cards[_currentPageIndex].key,
+                      style: TextStyle(
+                        fontSize: 10,
+                        height: 1.0,
+                        color:
+                            (isDark ? AppColors.cSlate200 : AppColors.cSlate800)
+                                .withValues(alpha: 0.5),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
               ),
             ),
           ),

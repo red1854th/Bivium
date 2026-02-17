@@ -8,10 +8,6 @@
     "settings": "设置",
     "add_project": "添加项目",
     "error_loading_quote": "加载引言失败",
-    "add_new_set": "添加新集合",
-    "add_set_desc": "粘贴 Google 表格 URL 或从云端硬盘中选择。",
-    "enter_sheet_url": "输入表格 URL",
-    "pick_from_drive": "从云端硬盘选择",
     "sign_in_required": "请在设置中登录 Google 账号以使用云端硬盘列表。",
     "dark_mode": "深色模式",
     "account": "账号",
@@ -85,5 +81,6 @@
     "recent": "最近的项目",
     "all_projects": "项目",
     "search_results": "搜索结果",
-    "welcome_message": "“Traduttore, traditore” - '译者即逆者'"
+    "welcome_message": "“Traduttore, traditore” - '译者即逆者'",
+    "search_result_for": "\"{}\"搜索结果"
 }

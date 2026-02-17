@@ -5,8 +5,7 @@ import '../../core/theme.dart';
 import '../../models/flashcard.dart';
 import '../../services/google_drive_service.dart';
 import 'drive_sheets_list_page.dart';
-import 'sheet_selection_dialog.dart';
-import 'widgets/sheet_input_widget.dart';
+import 'widgets/local_file_import_widget.dart';
 
 class AddSetDialog extends StatefulWidget {
   final Function(FlashcardSet) onAdd;
@@ -38,45 +37,6 @@ class _AddSetDialogState extends State<AddSetDialog> {
     return next;
   }
 
-  Future<void> _handleOpenSheetDialog(String sheetId, String sheetName) async {
-    debugPrint(
-      '_handleOpenSheetDialog called with sheetId: $sheetId, sheetName: $sheetName',
-    );
-
-    if (!mounted) return;
-
-    Navigator.of(context).pop(); // Close the input dialog
-
-    if (!mounted) return;
-
-    debugPrint('Opening SheetSelectionDialog...');
-    final set = await Navigator.of(context).push<FlashcardSet>(
-      MaterialPageRoute(
-        builder: (_) => SheetSelectionDialog(
-          sheetId: sheetId,
-          sheetName: sheetName,
-          service: widget.driveService,
-          onConfirm: (result) => Navigator.of(context).pop(result),
-        ),
-      ),
-    );
-
-    debugPrint('SheetSelectionDialog returned with set: $set');
-
-    if (set != null && mounted) {
-      debugPrint('Processing returned set...');
-      set.title = _uniquifyTitle(set.title, widget.allTitles);
-      widget.onAdd(set);
-
-      if (mounted) {
-        debugPrint('Closing AddSetDialog...');
-        Navigator.of(context).pop(); // Close add_set_dialog
-      }
-    } else {
-      debugPrint('Set is null or not mounted');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -102,7 +62,7 @@ class _AddSetDialogState extends State<AddSetDialog> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'add_new_set'.tr(),
+                    'add_project_desc'.tr(),
 
                     style: TextStyle(
                       fontSize: 24,
@@ -116,7 +76,7 @@ class _AddSetDialogState extends State<AddSetDialog> {
             const SizedBox(height: 24),
             if (!_showSheetInput) ...[
               Text(
-                'add_set_desc'.tr(),
+                'add_project_desc'.tr(),
 
                 style: TextStyle(
                   fontSize: 14,
@@ -129,7 +89,7 @@ class _AddSetDialogState extends State<AddSetDialog> {
                 child: FilledButton.icon(
                   onPressed: () => setState(() => _showSheetInput = true),
                   icon: const Icon(Icons.link, size: 20),
-                  label: Text('enter_sheet_url'.tr()),
+                  label: Text('local_language_file'.tr()),
 
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.cBrand600,
@@ -168,7 +128,7 @@ class _AddSetDialogState extends State<AddSetDialog> {
                           Navigator.of(context).pop();
                         },
                   icon: const Icon(Icons.folder_open_outlined, size: 20),
-                  label: Text('pick_from_drive'.tr()),
+                  label: Text('sheet_from_drive'.tr()),
 
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.cBrand600,
@@ -181,15 +141,19 @@ class _AddSetDialogState extends State<AddSetDialog> {
                 ),
               ),
             ] else ...[
-              Expanded(
-                child: SingleChildScrollView(
-                  child: SheetInputWidget(
-                    onAdd: widget.onAdd,
-                    allTitles: widget.allTitles,
-                    onOpenSheetDialog: _handleOpenSheetDialog,
+              if (widget.driveService != null)
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: LocalFileImportWidget(
+                      service: widget.driveService!,
+                      onAdd: (set) {
+                        set.title = _uniquifyTitle(set.title, widget.allTitles);
+                        widget.onAdd(set);
+                        Navigator.of(context).pop();
+                      },
+                    ),
                   ),
                 ),
-              ),
             ],
           ],
         ),
