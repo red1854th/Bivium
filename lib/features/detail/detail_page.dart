@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:bivium/services/google_drive_service.dart';
-
+import 'package:flutter/services.dart';
 import '../../core/theme.dart';
 import '../../models/flashcard.dart';
+import '../../services/google_drive_service.dart';
+import '../home/edit_project_page.dart';
 import 'tabs/items_tab.dart';
 import 'tabs/statistics_tab.dart';
 import 'tabs/glossary_tab.dart';
-import 'package:bivium/features/home/edit_project_page.dart';
-import 'package:bivium/widgets/card_list_common.dart';
+import '../../widgets/card_list_common.dart';
 
 class DetailPage extends StatefulWidget {
   final FlashcardSet setInfo;
@@ -34,8 +34,8 @@ class _DetailPageState extends State<DetailPage> {
   List<Flashcard> cards = [];
   bool isLoading = true;
   bool isExpanded = false;
-  int _currentIndex = 0; // 하단 탭 인덱스
-  int _currentCardPageIndex = 0; // 현재 선택된 카드 리스트 인덱스
+  int _currentIndex = 0;
+  int _currentCardPageIndex = 0;
 
   final PageController _pageController = PageController();
 
@@ -48,7 +48,7 @@ class _DetailPageState extends State<DetailPage> {
   @override
   void dispose() {
     _pageController.dispose();
-    SearchManager().reset(); // 홈으로 돌아갈 때 검색 소거
+    SearchManager().reset();
     super.dispose();
   }
 
@@ -73,13 +73,162 @@ class _DetailPageState extends State<DetailPage> {
     }
   }
 
-  /// 특정 인덱스의 카드로 스크롤 및 탭 이동
+  // --- 복원 로직 ---
+
+  // --- 복원 로직 ---
+
+  /// 메타데이터 존재 여부 확인
+  bool _hasExportMetadata() {
+    return widget.setInfo.metadata != null &&
+        widget.setInfo.metadata!.containsKey('regex_suffix');
+  }
+
+  /// 원본 구조 복원 및 내보내기 핸들러
+  void _handleExport() {
+    try {
+      final meta = widget.setInfo.metadata!;
+
+      // 이스케이프된 제어 문자를 실제 문자로 변환하는 내부 함수
+      String decode(dynamic val) {
+        if (val == null) return "";
+        String s = val.toString();
+        return s
+            .replaceAll(r'\n', '\n')
+            .replaceAll(r'\r', '\r')
+            .replaceAll(r'\t', '\t')
+            .replaceAll(r'\\', r'\');
+      }
+
+      // 1. 각 구성 요소 복원
+      final String filePre = decode(meta['file_prefix']);
+      final String regPre = decode(meta['regex_prefix']);
+      final String s1 = decode(meta['sep1']);
+      final String s2 = decode(meta['sep2']);
+      final String regSuf = decode(meta['regex_suffix']);
+      final String fileSuf = decode(meta['file_suffix']);
+
+      StringBuffer buffer = StringBuffer();
+
+      // 2. 파일 시작부(Header) 작성
+      buffer.write(filePre);
+
+      // 3. 카드 데이터 반복 조립
+      for (int i = 0; i < cards.length; i++) {
+        final card = cards[i];
+
+        // 카드별 접두사 (예: "Q: ")
+        buffer.write(regPre);
+
+        // Key 컬럼 복원 (존재 시)
+        if (widget.setInfo.keyColIdx != -1) {
+          buffer.write(card.key);
+          buffer.write(s1);
+        }
+
+        // 앞면(Source) 복원
+        buffer.write(card.front);
+
+        // 뒷면(Target) 복원 (존재 시)
+        if (widget.setInfo.backColIdx != -1) {
+          buffer.write(s2);
+          buffer.write(card.back);
+        }
+
+        // 카드별 접미사 (보통 \n 또는 특정 구분자)
+        buffer.write(regSuf);
+      }
+
+      // 4. 파일 종료부(Footer) 작성
+      buffer.write(fileSuf);
+
+      // 5. 프리뷰 시트 출력
+      _showExportSheet(buffer.toString());
+    } catch (e) {
+      debugPrint("Export Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('export_failed'.tr())));
+      }
+    }
+  }
+
+  /// 복원된 텍스트 프리뷰 및 복사 시트
+  void _showExportSheet(String text) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "export_preview".tr(),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white10
+                      : Colors.black12,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: SingleChildScrollView(
+                  child: Text(
+                    text,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: text));
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('copied_to_clipboard'.tr())),
+                    );
+                  },
+                  icon: const Icon(Icons.copy_all_rounded),
+                  label: Text("copy".tr()),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _navigateToCard(int index) {
     if (index < 0 || index >= cards.length) return;
-
     setState(() => _currentCardPageIndex = index);
-
-    // 먼저 리스트 탭(0번)으로 이동
     _onTabTapped(0);
   }
 
@@ -102,59 +251,55 @@ class _DetailPageState extends State<DetailPage> {
   ) {
     showDialog(
       context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: bgColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'description_label'.tr(),
-                  style: const TextStyle(
-                    color: AppColors.cBrand600,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                  ),
+      builder: (context) => Dialog(
+        backgroundColor: bgColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'description_label'.tr(),
+                style: const TextStyle(
+                  color: AppColors.cBrand600,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
                 ),
-                const SizedBox(height: 16),
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.4,
-                  ),
-                  child: SingleChildScrollView(
-                    child: Text(
-                      widget.setInfo.description,
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 14,
-                        height: 1.6,
-                      ),
+              ),
+              const SizedBox(height: 16),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.4,
+                ),
+                child: SingleChildScrollView(
+                  child: Text(
+                    widget.setInfo.description,
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 14,
+                      height: 1.6,
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      'close'.tr(),
-                      style: const TextStyle(color: AppColors.cBrand600),
-                    ),
+              ),
+              const SizedBox(height: 24),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    'close'.tr(),
+                    style: const TextStyle(color: AppColors.cBrand600),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -184,7 +329,6 @@ class _DetailPageState extends State<DetailPage> {
                     fontWeight: FontWeight.bold,
                   ),
                   overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
                 ),
               ),
               const SizedBox(width: 6),
@@ -200,6 +344,12 @@ class _DetailPageState extends State<DetailPage> {
         elevation: 0,
         iconTheme: IconThemeData(color: textColor),
         actions: [
+          if (_hasExportMetadata())
+            IconButton(
+              icon: const Icon(Icons.ios_share_rounded, size: 20),
+              onPressed: _handleExport,
+              color: AppColors.cBrand600,
+            ),
           IconButton(
             icon: const Icon(Icons.sync),
             onPressed: _fetchInitialData,
@@ -264,7 +414,6 @@ class _DetailPageState extends State<DetailPage> {
                               style: TextStyle(
                                 color: textColor,
                                 fontSize: 13,
-                                fontWeight: FontWeight.w400,
                                 height: 1.5,
                               ),
                               maxLines: 3,
@@ -322,9 +471,8 @@ class _DetailPageState extends State<DetailPage> {
                       ItemsTab(
                         cards: cards,
                         currentPageIndex: _currentCardPageIndex,
-                        onCardSelected: (index) {
-                          setState(() => _currentCardPageIndex = index);
-                        },
+                        onCardSelected: (index) =>
+                            setState(() => _currentCardPageIndex = index),
                         onCardsUpdated: (updatedList, lastIndex) {
                           setState(() {
                             cards = updatedList;

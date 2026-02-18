@@ -113,6 +113,7 @@ class FlashcardSet {
   DateTime lastAccessed;
   Map<String, dynamic> qcResults;
   String? extractRegex;
+  Map<String, String>? metadata;
 
   FlashcardSet({
     required this.id,
@@ -128,6 +129,7 @@ class FlashcardSet {
     required this.lastAccessed,
     Map<String, dynamic>? qcResults,
     this.extractRegex,
+    this.metadata,
   }) : qcResults = qcResults ?? {};
 
   Map<String, dynamic> toJson() => {
@@ -144,6 +146,7 @@ class FlashcardSet {
     'lastAccessed': lastAccessed.toIso8601String(),
     'qcResults': qcResults,
     'extractRegex': extractRegex,
+    'metadata': metadata,
   };
 
   factory FlashcardSet.fromJson(Map<String, dynamic> json) => FlashcardSet(
@@ -162,6 +165,9 @@ class FlashcardSet {
         ? Map<String, dynamic>.from(json['qcResults'])
         : {},
     extractRegex: json['extractRegex'],
+    metadata: json['metadata'] != null
+        ? Map<String, String>.from(json['metadata'])
+        : null,
   );
 
   FlashcardSet copyWith({
@@ -178,6 +184,7 @@ class FlashcardSet {
     DateTime? lastAccessed,
     Map<String, dynamic>? qcResults,
     String? extractRegex,
+    Map<String, String>? metadata,
   }) {
     return FlashcardSet(
       id: id ?? this.id,
@@ -193,6 +200,7 @@ class FlashcardSet {
       lastAccessed: lastAccessed ?? this.lastAccessed,
       qcResults: qcResults ?? this.qcResults,
       extractRegex: extractRegex ?? this.extractRegex,
+      metadata: metadata ?? this.metadata,
     );
   }
 }

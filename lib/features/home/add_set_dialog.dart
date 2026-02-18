@@ -24,7 +24,7 @@ class AddSetDialog extends StatefulWidget {
 }
 
 class _AddSetDialogState extends State<AddSetDialog> {
-  bool _showSheetInput = false;
+  bool _showLocalImport = false;
 
   String _uniquifyTitle(String title, List<String> existing) {
     if (!existing.contains(title)) return title;
@@ -41,12 +41,27 @@ class _AddSetDialogState extends State<AddSetDialog> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // 1. 로컬 파일 임포트 선택 시:
+    // LocalFileImportWidget 내부의 Scaffold가 전체 화면을 제어하도록 Dialog.fullscreen 사용
+    if (_showLocalImport && widget.driveService != null) {
+      return Dialog.fullscreen(
+        child: LocalFileImportWidget(
+          service: widget.driveService!,
+          onAdd: (set) {
+            set.title = _uniquifyTitle(set.title, widget.allTitles);
+            widget.onAdd(set);
+            Navigator.of(context).pop();
+          },
+        ),
+      );
+    }
+
+    // 2. 초기 선택 다이얼로그 (일반 다이얼로그 형태)
     return Dialog(
       backgroundColor: isDark ? AppColors.cDarkSurface : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         width: 600,
-        constraints: const BoxConstraints(maxHeight: 800),
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -60,101 +75,80 @@ class _AddSetDialogState extends State<AddSetDialog> {
                   size: 28,
                 ),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'add_project_desc'.tr(),
-
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? AppColors.cSlate100 : AppColors.cSlate800,
-                    ),
+                Text(
+                  'add_project'.tr(),
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? AppColors.cSlate100 : AppColors.cSlate800,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
-            if (!_showSheetInput) ...[
-              Text(
-                'add_project_desc'.tr(),
-
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
-                ),
+            Text(
+              'add_project_desc'.tr(),
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
               ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => setState(() => _showSheetInput = true),
-                  icon: const Icon(Icons.link, size: 20),
-                  label: Text('local_language_file'.tr()),
+            ),
+            const SizedBox(height: 32),
 
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.cBrand600,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+            // 로컬 파일 임포트 버튼
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => setState(() => _showLocalImport = true),
+                icon: const Icon(Icons.file_upload),
+                label: Text('local_language_file'.tr()),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.cBrand600,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed:
-                      (widget.driveService == null ||
-                          widget.driveService!.currentUser == null)
-                      ? () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('sign_in_required'.tr())),
-                          );
-                        }
-                      : () async {
-                          final result = await DriveSheetsListPage.open(
-                            context,
-                            widget.driveService!,
-                          );
-                          if (!context.mounted || result == null) return;
-                          final set = result.set;
-                          set.title = _uniquifyTitle(
-                            set.title,
-                            widget.allTitles,
-                          );
-                          widget.onAdd(set);
-                          Navigator.of(context).pop();
-                        },
-                  icon: const Icon(Icons.folder_open_outlined, size: 20),
-                  label: Text('sheet_from_drive'.tr()),
+            ),
 
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.cBrand600,
-                    side: const BorderSide(color: AppColors.cBrand600),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ] else ...[
-              if (widget.driveService != null)
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: LocalFileImportWidget(
-                      service: widget.driveService!,
-                      onAdd: (set) {
+            const SizedBox(height: 12),
+
+            // 구글 드라이브 버튼
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed:
+                    (widget.driveService == null ||
+                        widget.driveService!.currentUser == null)
+                    ? () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('sign_in_required'.tr())),
+                        );
+                      }
+                    : () async {
+                        final result = await DriveSheetsListPage.open(
+                          context,
+                          widget.driveService!,
+                        );
+                        if (!context.mounted || result == null) return;
+                        final set = result.set;
                         set.title = _uniquifyTitle(set.title, widget.allTitles);
                         widget.onAdd(set);
                         Navigator.of(context).pop();
                       },
-                    ),
+                icon: const Icon(Icons.folder_open_outlined),
+                label: Text('sheet_from_drive'.tr()),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.cBrand600,
+                  side: const BorderSide(color: AppColors.cBrand600),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-            ],
+              ),
+            ),
           ],
         ),
       ),
