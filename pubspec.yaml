@@ -17,14 +17,14 @@ dependencies:
   googleapis_auth: ^2.0.0
   flutter_native_splash: ^2.3.11
   uuid: ^4.4.0
-  re_editor: ^0.1.1
-  re_highlight: ^0.0.3
   easy_localization: ^3.0.8
   styled_text: ^9.0.0
   firebase_core: ^4.4.0
   flutter_svg: ^2.2.3
   file_picker: ^10.3.10
   desktop_drop: ^0.7.0
+  highlight: ^0.7.0
+  flutter_code_editor: ^0.3.5
 
 dev_dependencies:
   flutter_test:
