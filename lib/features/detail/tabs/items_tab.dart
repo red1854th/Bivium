@@ -353,6 +353,9 @@ class _ItemsTabState extends State<ItemsTab> {
                     cardIndex: originalIdx,
                     columnIdx: widget.setInfo.remarkColIdx,
                     initialRemark: parent.remark,
+                    frontText: parent.front,
+                    backText: parent.back,
+                    cardKey: parent.key,
                   ),
                 ),
               );
@@ -484,6 +487,9 @@ class _ItemsTabState extends State<ItemsTab> {
                     cardIndex: originalIndex,
                     columnIdx: widget.setInfo.remarkColIdx,
                     initialRemark: card.remark,
+                    frontText: card.front,
+                    backText: card.back,
+                    cardKey: card.key,
                   ),
                 ),
               );

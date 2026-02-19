@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
-
 import 'package:bivium/services/google_drive_service.dart';
 
 class RemarkPage extends StatefulWidget {
@@ -9,6 +8,9 @@ class RemarkPage extends StatefulWidget {
   final int cardIndex;
   final int columnIdx;
   final String initialRemark;
+  final String? cardKey;
+  final String frontText;
+  final String backText;
 
   const RemarkPage({
     super.key,
@@ -17,6 +19,9 @@ class RemarkPage extends StatefulWidget {
     required this.cardIndex,
     required this.columnIdx,
     required this.initialRemark,
+    this.cardKey,
+    required this.frontText,
+    required this.backText,
   });
 
   @override
@@ -24,14 +29,61 @@ class RemarkPage extends StatefulWidget {
 }
 
 class _RemarkPageState extends State<RemarkPage> {
-  late List<String> _remarkItems;
+  List<String> _remarkItems = [];
   final TextEditingController _inputController = TextEditingController();
   bool _isSaving = false;
+  bool _isLoading = true;
 
+  static const Color cBrand50 = Color(0xFFF0FFF1);
+  static const Color cBrand600 = Color(0xFF5AE361);
+  static const Color cDarkBg = Color(0xFF0C1D12);
+  static const Color cDarkSurface = Color(0xFF1B2B21);
+  static const Color cWhiteSurface = Color(0xFFF9FFF9);
   @override
   void initState() {
     super.initState();
-    _parseRemarks(widget.initialRemark);
+    _fetchLatestRemarks();
+  }
+
+  Future<void> _fetchLatestRemarks() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    final range =
+        '${String.fromCharCode(65 + widget.columnIdx)}${widget.cardIndex + 2}';
+    try {
+      final String latestData = await widget.service.getSpreadsheetCell(
+        widget.spreadsheetId,
+        range,
+      );
+      _parseRemarks(latestData);
+    } catch (e) {
+      _parseRemarks(widget.initialRemark);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _saveToSheets(List<String> updatedList) async {
+    setState(() => _isSaving = true);
+    final fullText = updatedList.join('\n\n');
+    final range =
+        '${String.fromCharCode(65 + widget.columnIdx)}${widget.cardIndex + 2}';
+    try {
+      await widget.service.updateSpreadsheetCell(
+        widget.spreadsheetId,
+        range,
+        fullText,
+      );
+      setState(() => _remarkItems = updatedList);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('save_failed'.tr())));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   void _parseRemarks(String text) {
@@ -43,49 +95,41 @@ class _RemarkPageState extends State<RemarkPage> {
   }
 
   Future<void> _addRemark() async {
-    final newText = _inputController.text.trim();
-    if (newText.isEmpty) return;
+    final text = _inputController.text.trim();
+    if (text.isEmpty) return;
+    await _saveToSheets(List<String>.from(_remarkItems)..add(text));
+    _inputController.clear();
+  }
 
-    setState(() => _isSaving = true);
-
-    // 기존 리스트에 새 항목 추가 후 \n\n으로 결합
-    final updatedList = List<String>.from(_remarkItems)..add(newText);
-    final fullText = updatedList.join('\n\n');
-
-    try {
-      final range =
-          '${String.fromCharCode(65 + widget.columnIdx)}${widget.cardIndex + 2}';
-      await widget.service.updateSpreadsheetCell(
-        widget.spreadsheetId,
-        range,
-        fullText,
-      );
-
-      setState(() {
-        _remarkItems = updatedList;
-        _inputController.clear();
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('save_failed_msg'.tr())));
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+  Future<void> _editItem(int index) async {
+    final editController = TextEditingController(text: _remarkItems[index]);
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('edit'.tr()),
+        content: TextField(controller: editController, maxLines: null),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('cancel'.tr()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('save'.tr()),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && editController.text.trim().isNotEmpty) {
+      final list = List<String>.from(_remarkItems);
+      list[index] = editController.text.trim();
+      await _saveToSheets(list);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    // 리스트 박스 강조 색상 (브랜드 컬러 또는 포인트 컬러 활용)
-    final Color cardBgColor = isDark
-        ? Colors.blueGrey.withValues(alpha: 0.2)
-        : Colors.blue.withValues(alpha: 0.08);
-    final Color borderColor = isDark
-        ? Colors.blue.withValues(alpha: 0.4)
-        : Colors.blue.withValues(alpha: 0.3);
 
     return PopScope(
       canPop: false,
@@ -94,104 +138,161 @@ class _RemarkPageState extends State<RemarkPage> {
         Navigator.pop(context, _remarkItems.join('\n\n'));
       },
       child: Scaffold(
-        appBar: AppBar(title: Text('remark_log'.tr())),
-
+        backgroundColor: isDark ? cDarkBg : cBrand50,
+        appBar: AppBar(
+          backgroundColor: isDark ? cDarkSurface : cWhiteSurface,
+          elevation: 0,
+          title: Text('remark_log'.tr()),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _isLoading ? null : _fetchLatestRemarks,
+            ),
+          ],
+        ),
         body: Column(
           children: [
-            // 1. 리스트 영역
+            // 카드 정보 헤더 (구분선 제거)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? cDarkSurface
+                    : cWhiteSurface.withValues(alpha: 0.9),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 인덱스 및 Key 글자 색상을 브랜드 컬러로 변경
+                  Text(
+                    '#${widget.cardIndex + 1} ${widget.cardKey ?? ""}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: cBrand600, // 브랜드 컬러 적용
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeaderBox('', widget.frontText),
+                      const SizedBox(width: 16),
+                      _buildHeaderBox('', widget.backText),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // 비고 리스트
             Expanded(
-              child: _remarkItems.isEmpty
-                  ? Center(child: Text('no_remarks_msg'.tr()))
-                  : ListView.separated(
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: cBrand600),
+                    )
+                  : ListView.builder(
                       padding: const EdgeInsets.all(16),
                       itemCount: _remarkItems.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 12),
                       itemBuilder: (context, index) => Container(
-                        padding: const EdgeInsets.all(16),
+                        margin: const EdgeInsets.only(bottom: 10),
                         decoration: BoxDecoration(
-                          color: cardBgColor,
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.05)
+                              : Colors.white,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: borderColor, width: 1.5),
                         ),
-                        child: Text(
-                          _remarkItems[index],
-                          style: const TextStyle(
-                            fontSize: 15,
-                            height: 1.4,
-                            fontWeight: FontWeight.w500,
+                        child: ListTile(
+                          title: Text(
+                            _remarkItems[index],
+                            style: const TextStyle(fontSize: 15),
+                          ),
+                          trailing: PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert),
+                            onSelected: (val) {
+                              if (val == 'edit'.tr()) _editItem(index);
+                              if (val == 'delete'.tr()) {
+                                _saveToSheets(
+                                  List<String>.from(_remarkItems)
+                                    ..removeAt(index),
+                                );
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              PopupMenuItem(
+                                value: 'edit'.tr(),
+                                child: Text('edit'.tr()),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete'.tr(),
+                                child: Text(
+                                  'delete'.tr(),
+                                  style: const TextStyle(color: Colors.red),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ),
             ),
-            // 2. 입력 영역 (기존 박스 형태 복구)
-            Container(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                12,
-                16,
-                MediaQuery.of(context).padding.bottom + 12,
-              ),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, -5),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _inputController,
-                      maxLines: null,
-                      decoration: InputDecoration(
-                        hintText: 'enter_remark'.tr(),
-
-                        filled: true,
-                        fillColor: isDark ? Colors.white10 : Colors.grey[100],
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(25),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 10,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _isSaving
-                      ? const SizedBox(
-                          width: 48,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : CircleAvatar(
-                          backgroundColor: Colors.blue,
-                          child: IconButton(
-                            icon: const Icon(
-                              Icons.arrow_upward,
-                              color: Colors.white,
-                            ),
-                            onPressed: _addRemark,
-                          ),
-                        ),
-                ],
-              ),
-            ),
+            _buildBottomInput(isDark),
           ],
         ),
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _inputController.dispose();
-    super.dispose();
+  Widget _buildHeaderBox(String label, String text) {
+    return Expanded(
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        maxLines: 5,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  Widget _buildBottomInput(bool isDark) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        12,
+        20,
+        MediaQuery.of(context).padding.bottom + 12,
+      ),
+      decoration: BoxDecoration(
+        color: isDark ? cDarkSurface : cWhiteSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _inputController,
+              enabled: !_isSaving && !_isLoading,
+              decoration: InputDecoration(
+                hintText: 'enter_remark'.tr(),
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          _isSaving
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: cBrand600,
+                  ),
+                )
+              : IconButton(
+                  onPressed: _isLoading ? null : _addRemark,
+                  icon: const Icon(Icons.arrow_upward, color: cBrand600),
+                ),
+        ],
+      ),
+    );
   }
 }

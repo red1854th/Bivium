@@ -186,7 +186,8 @@ class _CardEditorState extends State<CardEditor> {
                 ? AppColors.cBrand600
                 : Colors.grey,
             onTap: () async {
-              await Navigator.push(
+              // Navigator.push 앞에 'final updatedRemark =' 를 반드시 붙여야 합니다.
+              final updatedRemark = await Navigator.push<String>(
                 context,
                 MaterialPageRoute(
                   builder: (_) => RemarkPage(
@@ -195,10 +196,19 @@ class _CardEditorState extends State<CardEditor> {
                     cardIndex: widget.cardIndex,
                     columnIdx: widget.setInfo.remarkColIdx,
                     initialRemark: widget.card.remark,
+                    frontText: widget.card.front,
+                    backText: widget.card.back,
+                    cardKey: widget.card.key,
                   ),
                 ),
               );
-              if (mounted) setState(() {});
+
+              // 반환된 값이 있을 경우(정의된 변수 사용) 상태 업데이트
+              if (updatedRemark != null && mounted) {
+                setState(() {
+                  widget.card.remark = updatedRemark;
+                });
+              }
             },
           ),
           _iconAction(

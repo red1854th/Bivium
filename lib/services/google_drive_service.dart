@@ -335,6 +335,24 @@ class GoogleDriveService {
     }
   }
 
+  Future<String> getSpreadsheetCell(String spreadsheetId, String range) async {
+    final client = await _getAuthenticatedClient();
+    if (client == null) return "";
+
+    final sheetsApi = sheets.SheetsApi(client);
+    try {
+      final response = await sheetsApi.spreadsheets.values.get(
+        spreadsheetId,
+        range,
+      );
+      if (response.values == null || response.values!.isEmpty) return "";
+      return response.values![0][0]?.toString() ?? "";
+    } catch (e) {
+      debugPrint('셀 데이터 로드 실패: $e');
+      return "";
+    }
+  }
+
   Future<void> updateRowGroupExpansion({
     required String spreadsheetId,
     required int sheetId,
