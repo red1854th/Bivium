@@ -107,6 +107,7 @@ class _EditCardPageState extends State<EditCardPage> {
         _handlePop();
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: true,
         backgroundColor: isDark ? AppColors.cDarkSurface : AppColors.cSlate50,
         appBar: AppBar(
           toolbarHeight: 40,

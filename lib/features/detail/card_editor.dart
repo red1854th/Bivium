@@ -6,8 +6,6 @@ import 'package:bivium/services/google_drive_service.dart';
 import 'package:bivium/features/detail/remark_page.dart';
 import 'package:bivium/core/theme.dart';
 import 'package:bivium/features/editor/text_editor.dart';
-
-// 설정 패널 임포트
 import 'package:bivium/features/home/widgets/editor_settings_panel.dart';
 
 class CardEditor extends StatefulWidget {
@@ -30,20 +28,183 @@ class CardEditor extends StatefulWidget {
   State<CardEditor> createState() => _CardEditorState();
 }
 
-class _CardEditorState extends State<CardEditor> {
+class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
+  late ZebraHighlightController _frontController;
+  late ZebraHighlightController _backController;
+  final FocusNode _frontFocus = FocusNode();
+  final FocusNode _backFocus = FocusNode();
+
+  final UndoHistoryController _frontUndoController = UndoHistoryController();
+  final UndoHistoryController _backUndoController = UndoHistoryController();
+
+  OverlayEntry? _overlayEntry;
+  bool _isKeyboardVisible = false;
+  bool _isSettingsOpen = false;
+  bool _isVertical = true;
   EditorSettings _settings = EditorSettings(
     fontSize: 19.0,
     lineHeight: 1.4,
     fontFamily: 'Pretendard',
   );
 
-  bool _isVertical = true;
-  bool _isSettingsOpen = false;
-
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _frontController = ZebraHighlightController()..text = widget.card.front;
+    _backController = ZebraHighlightController()..text = widget.card.back;
+
+    _frontUndoController.addListener(_updateToolbar);
+    _backUndoController.addListener(_updateToolbar);
     _loadPreferences();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _removeToolbar();
+    _frontUndoController.dispose();
+    _backUndoController.dispose();
+    _frontController.dispose();
+    _backController.dispose();
+    _frontFocus.dispose();
+    _backFocus.dispose();
+    super.dispose();
+  }
+
+  void _updateToolbar() {
+    if (_overlayEntry != null) _overlayEntry!.markNeedsBuild();
+  }
+
+  @override
+  void didChangeMetrics() {
+    final bottomInset = WidgetsBinding
+        .instance
+        .platformDispatcher
+        .views
+        .first
+        .viewInsets
+        .bottom;
+    final newValue = bottomInset > 0;
+    if (_isKeyboardVisible != newValue) {
+      _isKeyboardVisible = newValue;
+      if (_isKeyboardVisible && (_frontFocus.hasFocus || _backFocus.hasFocus)) {
+        _showToolbar();
+      } else {
+        _removeToolbar();
+      }
+    }
+  }
+
+  void _showToolbar() {
+    _removeToolbar();
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) {
+        final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+        if (keyboardHeight == 0) return const SizedBox.shrink();
+
+        final activeUndo = _frontFocus.hasFocus
+            ? _frontUndoController
+            : _backUndoController;
+
+        return Positioned(
+          bottom: keyboardHeight,
+          left: 0,
+          right: 0,
+          child: Material(
+            elevation: 10,
+            child: Container(
+              height: 45,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF8F8F8),
+              child: Row(
+                children: [
+                  _toolIcon(
+                    Icons.add_box_outlined,
+                    () => _handleInsertText("[ ]"),
+                  ),
+                  ValueListenableBuilder(
+                    valueListenable: activeUndo,
+                    builder: (context, value, _) {
+                      return Row(
+                        children: [
+                          _toolIcon(
+                            Icons.undo_rounded,
+                            value.canUndo ? () => activeUndo.undo() : null,
+                          ),
+                          _toolIcon(
+                            Icons.redo_rounded,
+                            value.canRedo ? () => activeUndo.redo() : null,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const Spacer(),
+                  _toolIcon(
+                    Icons.arrow_back_ios_new_rounded,
+                    () => _moveCursor(-1),
+                  ),
+                  _toolIcon(
+                    Icons.arrow_forward_ios_rounded,
+                    () => _moveCursor(1),
+                  ),
+                  const VerticalDivider(width: 20, indent: 12, endIndent: 12),
+                  _toolIcon(
+                    Icons.keyboard_hide_rounded,
+                    () => FocusScope.of(context).unfocus(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _removeToolbar() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  void _handleInsertText(String text) {
+    final controller = _frontFocus.hasFocus
+        ? _frontController
+        : _backController;
+    final selection = controller.selection;
+
+    // 이력을 남기기 위해 value를 직접 교체 (TextField가 포커스된 상태여야 함)
+    final newText = controller.text.replaceRange(
+      selection.start,
+      selection.end,
+      text,
+    );
+
+    controller.value = controller.value.copyWith(
+      text: newText,
+      selection: TextSelection.collapsed(offset: selection.start + text.length),
+    );
+
+    // 수동 변경 후 프런트엔드 반영을 위해 onChanged 호출
+    if (_frontFocus.hasFocus) {
+      widget.card.front = newText;
+    } else {
+      widget.card.back = newText;
+    }
+  }
+
+  void _moveCursor(int offset) {
+    final controller = _frontFocus.hasFocus
+        ? _frontController
+        : _backController;
+    final newOffset = controller.selection.extentOffset + offset;
+    if (newOffset >= 0 && newOffset <= controller.text.length) {
+      controller.selection = TextSelection.collapsed(offset: newOffset);
+    }
   }
 
   Future<void> _loadPreferences() async {
@@ -59,114 +220,114 @@ class _CardEditorState extends State<CardEditor> {
     });
   }
 
-  Future<void> _saveLayoutPreference(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('is_editor_vertical', value);
-  }
-
-  /// 설정창 상태를 변경하고 부모에게 알림
-  void _setSettingsOpen(bool open) {
-    if (_isSettingsOpen == open) return;
-    setState(() => _isSettingsOpen = open);
-    widget.onSettingsToggle(open); // 부모(EditCardPage)에게 상태 전달
-  }
-
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final Color cardBg = widget.card.isFlagged
-        ? (isDark
-              ? const Color(0xFFFFFF00).withValues(alpha: 0.1)
-              : const Color(0xFFFFF9c4))
-        : (isDark ? AppColors.cDarkBg : AppColors.cBg);
-
     return Stack(
-      clipBehavior: Clip.none,
       children: [
-        // [레이어 1] 메인 에디터 카드
-        Container(
-          margin: const EdgeInsets.fromLTRB(10, 5, 10, 10),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
-            ),
-          ),
-          child: Column(
-            children: [
-              Expanded(
-                child: Flex(
-                  direction: _isVertical ? Axis.vertical : Axis.horizontal,
+        Column(
+          children: [
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(10, 5, 10, 10),
+                decoration: BoxDecoration(
+                  color: widget.card.isFlagged
+                      ? (isDark
+                            ? const Color(0xFFFFFF00).withValues(alpha: 0.1)
+                            : const Color(0xFFFFF9C4))
+                      : (isDark ? AppColors.cDarkBg : AppColors.cBg),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(
+                    color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
+                  ),
+                ),
+                child: Column(
                   children: [
                     Expanded(
-                      child: TextEditor(
-                        initialContent: widget.card.front,
-                        onChanged: (val) => widget.card.front = val,
-                        fontSize: _settings.fontSize,
-                        lineHeight: _settings.lineHeight,
-                        fontFamily: _settings.fontFamily,
+                      child: Flex(
+                        direction: _isVertical
+                            ? Axis.vertical
+                            : Axis.horizontal,
+                        children: [
+                          Expanded(
+                            child: TextEditor(
+                              controller: _frontController,
+                              focusNode: _frontFocus,
+                              undoController: _frontUndoController,
+                              onChanged: (v) => widget.card.front = v,
+                              fontSize: _settings.fontSize,
+                              lineHeight: _settings.lineHeight,
+                              fontFamily: _settings.fontFamily,
+                            ),
+                          ),
+                          Container(
+                            width: _isVertical ? double.infinity : 1,
+                            height: _isVertical ? 1 : double.infinity,
+                            color: isDark ? Colors.white10 : Colors.black12,
+                          ),
+                          Expanded(
+                            child: TextEditor(
+                              controller: _backController,
+                              focusNode: _backFocus,
+                              undoController: _backUndoController,
+                              onChanged: (v) => widget.card.back = v,
+                              fontSize: _settings.fontSize,
+                              lineHeight: _settings.lineHeight,
+                              fontFamily: _settings.fontFamily,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    Container(
-                      width: _isVertical ? double.infinity : 1,
-                      height: _isVertical ? 1 : double.infinity,
-                      color: isDark ? Colors.white10 : Colors.black12,
-                    ),
-                    Expanded(
-                      child: TextEditor(
-                        initialContent: widget.card.back,
-                        onChanged: (val) => widget.card.back = val,
-                        fontSize: _settings.fontSize,
-                        lineHeight: _settings.lineHeight,
-                        fontFamily: _settings.fontFamily,
-                      ),
-                    ),
+                    _buildBottomToolbar(context),
                   ],
                 ),
               ),
-              _buildBottomToolbar(context),
-            ],
-          ),
+            ),
+          ],
         ),
-
-        // [레이어 2] 딤 레이어 + 터치 차단막 (부모 핸들까지 덮음)
         if (_isSettingsOpen)
           Positioned.fill(
-            top: -100,
-            bottom: -100,
-            left: -50,
-            right: -50,
             child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _setSettingsOpen(false),
-              onHorizontalDragUpdate: (details) {
-                if (details.delta.dx > 8) _setSettingsOpen(false);
+              onTap: () {
+                setState(() => _isSettingsOpen = false);
+                widget.onSettingsToggle(false);
               },
-              child: Container(color: Colors.black.withValues(alpha: 0.35)),
+              child: Container(color: Colors.black45),
             ),
           ),
-
-        // [레이어 3] 설정 패널
         EditorSettingsPanel(
           isVisible: _isSettingsOpen,
           currentSettings: _settings,
           card: widget.card,
           cardIndex: widget.cardIndex,
-          onSettingsChanged: (newSettings) {
-            setState(() => _settings = newSettings);
+          onSettingsChanged: (s) => setState(() => _settings = s),
+          onClose: () {
+            setState(() => _isSettingsOpen = false);
+            widget.onSettingsToggle(false);
           },
-          onClose: () => _setSettingsOpen(false),
         ),
       ],
     );
   }
 
-  Widget _buildBottomToolbar(BuildContext context) {
-    final bool isDark =
-        Theme.of(context).brightness == Brightness.dark; // 여기서 다시 정의
+  Widget _toolIcon(IconData icon, VoidCallback? onTap) {
+    return IconButton(
+      onPressed: onTap,
+      icon: Icon(
+        icon,
+        size: 22,
+        color: onTap == null
+            ? Colors.grey.withValues(alpha: 0.5)
+            : AppColors.cBrand600,
+      ),
+      visualDensity: VisualDensity.compact,
+    );
+  }
 
+  Widget _buildBottomToolbar(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       height: 40,
       decoration: BoxDecoration(
@@ -182,12 +343,11 @@ class _CardEditorState extends State<CardEditor> {
         children: [
           _iconAction(
             icon: Icons.history_edu_rounded,
-            color: (widget.card.remark.trim().isNotEmpty)
+            color: widget.card.remark.isNotEmpty
                 ? AppColors.cBrand600
                 : Colors.grey,
             onTap: () async {
-              // Navigator.push 앞에 'final updatedRemark =' 를 반드시 붙여야 합니다.
-              final updatedRemark = await Navigator.push<String>(
+              final res = await Navigator.push<String>(
                 context,
                 MaterialPageRoute(
                   builder: (_) => RemarkPage(
@@ -202,13 +362,7 @@ class _CardEditorState extends State<CardEditor> {
                   ),
                 ),
               );
-
-              // 반환된 값이 있을 경우(정의된 변수 사용) 상태 업데이트
-              if (updatedRemark != null && mounted) {
-                setState(() {
-                  widget.card.remark = updatedRemark;
-                });
-              }
+              if (res != null) setState(() => widget.card.remark = res);
             },
           ),
           _iconAction(
@@ -218,11 +372,7 @@ class _CardEditorState extends State<CardEditor> {
                 setState(() => widget.card.isFlagged = !widget.card.isFlagged),
           ),
           _iconAction(
-            onTap: () {
-              final newValue = !_isVertical;
-              setState(() => _isVertical = newValue);
-              _saveLayoutPreference(newValue);
-            },
+            onTap: () => setState(() => _isVertical = !_isVertical),
             child: RotatedBox(
               quarterTurns: _isVertical ? 0 : 1,
               child: const Icon(
@@ -234,7 +384,10 @@ class _CardEditorState extends State<CardEditor> {
           ),
           _iconAction(
             icon: Icons.more_vert_rounded,
-            onTap: () => _setSettingsOpen(true),
+            onTap: () {
+              setState(() => _isSettingsOpen = true);
+              widget.onSettingsToggle(true);
+            },
           ),
         ],
       ),

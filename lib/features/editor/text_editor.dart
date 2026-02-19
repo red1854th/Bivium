@@ -3,7 +3,9 @@ import 'package:highlight/highlight.dart' show highlight, Node;
 import 'highlight_rules.dart';
 
 class TextEditor extends StatefulWidget {
-  final String initialContent;
+  final ZebraHighlightController controller;
+  final FocusNode focusNode;
+  final UndoHistoryController? undoController; // 전달받은 컨트롤러
   final ValueChanged<String> onChanged;
   final double fontSize;
   final double lineHeight;
@@ -11,7 +13,9 @@ class TextEditor extends StatefulWidget {
 
   const TextEditor({
     super.key,
-    required this.initialContent,
+    required this.controller,
+    required this.focusNode,
+    this.undoController,
     required this.onChanged,
     required this.fontSize,
     required this.lineHeight,
@@ -23,17 +27,10 @@ class TextEditor extends StatefulWidget {
 }
 
 class _TextEditorState extends State<TextEditor> {
-  late ZebraHighlightController _controller;
-
   @override
   void initState() {
     super.initState();
-    // 1. 사용자 정의 언어 규칙 등록
     highlight.registerLanguage('game_tags', HighlightRules.buildMode());
-
-    _controller = ZebraHighlightController();
-    _controller.text = widget.initialContent;
-    _controller.addListener(() => widget.onChanged(_controller.text));
   }
 
   @override
@@ -41,7 +38,9 @@ class _TextEditorState extends State<TextEditor> {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
     return TextField(
-      controller: _controller,
+      controller: widget.controller,
+      focusNode: widget.focusNode,
+      undoController: widget.undoController, // [필수] 이 부분이 연결되어야 작동함
       maxLines: null,
       expands: true,
       textAlignVertical: TextAlignVertical.center,
@@ -51,15 +50,11 @@ class _TextEditorState extends State<TextEditor> {
         height: widget.lineHeight,
         color: isDark ? Colors.white : Colors.black87,
       ),
-      strutStyle: StrutStyle(
-        fontSize: widget.fontSize,
-        height: widget.lineHeight,
-        forceStrutHeight: true,
-      ),
       decoration: const InputDecoration(
         border: InputBorder.none,
-        contentPadding: EdgeInsets.symmetric(horizontal: 16),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
+      onChanged: widget.onChanged,
     );
   }
 }
