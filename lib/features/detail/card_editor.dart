@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/services/google_drive_service.dart';
 import 'package:bivium/features/detail/remark_page.dart';
 import 'package:bivium/core/theme.dart';
 import 'package:bivium/features/editor/text_editor.dart';
 import 'package:bivium/features/home/widgets/editor_settings_panel.dart';
+import 'package:bivium/features/home/widgets/editor_toolbar.dart';
 
 class CardEditor extends StatefulWidget {
   final Flashcard card;
@@ -38,7 +38,7 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
   final UndoHistoryController _backUndoController = UndoHistoryController();
 
   OverlayEntry? _overlayEntry;
-  bool _isKeyboardVisible = false;
+  // _isKeyboardVisible 필드는 사용하지 않으므로 삭제되었습니다.
   bool _isSettingsOpen = false;
   bool _isVertical = true;
   EditorSettings _settings = EditorSettings(
@@ -54,9 +54,20 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
     _frontController = ZebraHighlightController()..text = widget.card.front;
     _backController = ZebraHighlightController()..text = widget.card.back;
 
-    _frontUndoController.addListener(_updateToolbar);
-    _backUndoController.addListener(_updateToolbar);
+    _frontUndoController.addListener(() => _onUndoRedoNotify(_frontController));
+    _backUndoController.addListener(() => _onUndoRedoNotify(_backController));
+
     _loadPreferences();
+  }
+
+  void _onUndoRedoNotify(TextEditingController controller) {
+    _updateToolbar();
+    // 커서 위치 보정 (중괄호 추가)
+    if (controller.selection.start > controller.text.length) {
+      controller.selection = TextSelection.collapsed(
+        offset: controller.text.length,
+      );
+    }
   }
 
   @override
@@ -72,93 +83,46 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  void _updateToolbar() {
-    if (_overlayEntry != null) _overlayEntry!.markNeedsBuild();
-  }
+  void _updateToolbar() => _overlayEntry?.markNeedsBuild();
 
   @override
   void didChangeMetrics() {
-    final bottomInset = WidgetsBinding
-        .instance
-        .platformDispatcher
-        .views
-        .first
-        .viewInsets
-        .bottom;
-    final newValue = bottomInset > 0;
-    if (_isKeyboardVisible != newValue) {
-      _isKeyboardVisible = newValue;
-      if (_isKeyboardVisible && (_frontFocus.hasFocus || _backFocus.hasFocus)) {
-        _showToolbar();
-      } else {
-        _removeToolbar();
-      }
+    final bottomInset = View.of(context).viewInsets.bottom;
+    final isKeyboardOpen = bottomInset > 0;
+
+    if (isKeyboardOpen && (_frontFocus.hasFocus || _backFocus.hasFocus)) {
+      Future.microtask(() => _showToolbar());
+    } else {
+      _removeToolbar();
     }
   }
 
   void _showToolbar() {
-    _removeToolbar();
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    if (_overlayEntry != null) return;
 
     _overlayEntry = OverlayEntry(
       builder: (context) {
         final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
         if (keyboardHeight == 0) return const SizedBox.shrink();
 
-        final activeUndo = _frontFocus.hasFocus
-            ? _frontUndoController
-            : _backUndoController;
-
+        final bool isFront = _frontFocus.hasFocus;
         return Positioned(
           bottom: keyboardHeight,
           left: 0,
           right: 0,
-          child: Material(
-            elevation: 10,
-            child: Container(
-              height: 45,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF8F8F8),
-              child: Row(
-                children: [
-                  _toolIcon(
-                    Icons.add_box_outlined,
-                    () => _handleInsertText("[ ]"),
-                  ),
-                  ValueListenableBuilder(
-                    valueListenable: activeUndo,
-                    builder: (context, value, _) {
-                      return Row(
-                        children: [
-                          _toolIcon(
-                            Icons.undo_rounded,
-                            value.canUndo ? () => activeUndo.undo() : null,
-                          ),
-                          _toolIcon(
-                            Icons.redo_rounded,
-                            value.canRedo ? () => activeUndo.redo() : null,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  const Spacer(),
-                  _toolIcon(
-                    Icons.arrow_back_ios_new_rounded,
-                    () => _moveCursor(-1),
-                  ),
-                  _toolIcon(
-                    Icons.arrow_forward_ios_rounded,
-                    () => _moveCursor(1),
-                  ),
-                  const VerticalDivider(width: 20, indent: 12, endIndent: 12),
-                  _toolIcon(
-                    Icons.keyboard_hide_rounded,
-                    () => FocusScope.of(context).unfocus(),
-                  ),
-                ],
-              ),
-            ),
+          child: EditorToolbar(
+            activeController: isFront ? _frontController : _backController,
+            undoController: isFront
+                ? _frontUndoController
+                : _backUndoController,
+            onHideKeyboard: () => FocusScope.of(context).unfocus(),
+            onUpdateCard: (val) {
+              if (isFront) {
+                widget.card.front = val;
+              } else {
+                widget.card.back = val;
+              }
+            },
           ),
         );
       },
@@ -167,43 +131,9 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
   }
 
   void _removeToolbar() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-  }
-
-  void _handleInsertText(String text) {
-    final controller = _frontFocus.hasFocus
-        ? _frontController
-        : _backController;
-    final selection = controller.selection;
-
-    // 이력을 남기기 위해 value를 직접 교체 (TextField가 포커스된 상태여야 함)
-    final newText = controller.text.replaceRange(
-      selection.start,
-      selection.end,
-      text,
-    );
-
-    controller.value = controller.value.copyWith(
-      text: newText,
-      selection: TextSelection.collapsed(offset: selection.start + text.length),
-    );
-
-    // 수동 변경 후 프런트엔드 반영을 위해 onChanged 호출
-    if (_frontFocus.hasFocus) {
-      widget.card.front = newText;
-    } else {
-      widget.card.back = newText;
-    }
-  }
-
-  void _moveCursor(int offset) {
-    final controller = _frontFocus.hasFocus
-        ? _frontController
-        : _backController;
-    final newOffset = controller.selection.extentOffset + offset;
-    if (newOffset >= 0 && newOffset <= controller.text.length) {
-      controller.selection = TextSelection.collapsed(offset: newOffset);
+    if (_overlayEntry != null) {
+      _overlayEntry!.remove();
+      _overlayEntry = null;
     }
   }
 
@@ -234,7 +164,7 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
                 decoration: BoxDecoration(
                   color: widget.card.isFlagged
                       ? (isDark
-                            ? const Color(0xFFFFFF00).withValues(alpha: 0.1)
+                            ? const Color(0xFFFFFF00).withAlpha(25)
                             : const Color(0xFFFFF9C4))
                       : (isDark ? AppColors.cDarkBg : AppColors.cBg),
                   borderRadius: BorderRadius.circular(15),
@@ -312,20 +242,6 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
     );
   }
 
-  Widget _toolIcon(IconData icon, VoidCallback? onTap) {
-    return IconButton(
-      onPressed: onTap,
-      icon: Icon(
-        icon,
-        size: 22,
-        color: onTap == null
-            ? Colors.grey.withValues(alpha: 0.5)
-            : AppColors.cBrand600,
-      ),
-      visualDensity: VisualDensity.compact,
-    );
-  }
-
   Widget _buildBottomToolbar(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
@@ -362,7 +278,9 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
                   ),
                 ),
               );
-              if (res != null) setState(() => widget.card.remark = res);
+              if (res != null) {
+                setState(() => widget.card.remark = res);
+              }
             },
           ),
           _iconAction(
