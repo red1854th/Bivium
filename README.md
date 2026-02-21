@@ -1,10 +1,10 @@
 # Bivium
 <p align="left">
-  <img src="assets/icon/app_logo.png" width="100" alt="App Logo">
+  <img src="assets/icon/app_logo.svg" width="100" alt="App Logo">
 </p>
-A Flutter-based LQA & Translation tool that streamlines translation audits with real-time Google Sheets synchronization.
+A Flutter-based LQA & translation tool that streamlines translation audits with batch-time Google Sheets synchronization.
 
-구글 시트와 실시간 연동되어 번역 데이터 수정 및 LQA 검수 효율을 극대화하는 Flutter 기반 현지화 도구.
+구글 시트와 배치로 연동되어 번역 데이터 수정 및 LQA 검수 효율을 극대화하는 Flutter 기반 번역 도구.
 
 
 ## 🚀 Getting Started
@@ -19,7 +19,7 @@ A Flutter-based LQA & Translation tool that streamlines translation audits with 
 * **Development**: 100% AI-assisted (Purely Vibe-Coded)
 
 ## 🔍 Description
-A professional Flutter tool designed to streamline the Translation and LQA (Language Quality Assurance) process using Google Sheets as a real-time backend.
+A professional Flutter tool designed to streamline the translation and LQA (Language Quality Assurance) process using Google Sheets as a batch-time backend.
 
 Key Features
 
