@@ -176,7 +176,6 @@ class FlashcardFolderHeader extends StatelessWidget {
   final double scale;
   final double opacity;
   final VoidCallback? onLongPress;
-
   final bool isSimple;
 
   const FlashcardFolderHeader({
@@ -199,99 +198,98 @@ class FlashcardFolderHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     bool hasActions = actions != null && actions!.isNotEmpty;
 
-    return Transform.scale(
-      scale: scale,
-      child: Opacity(
-        opacity: opacity,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: Row(
-            children: [
-              CardListUtils.buildDepthSpacers(parent.groupDepth),
-              Expanded(
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Material(
-                      color: (parent.isFlagged
-                          ? (isDark
-                                ? const Color(0xFFFFFF00).withValues(alpha: 0.1)
-                                : const Color(0xFFFFF9C4))
-                          : (isDark
-                                ? AppColors.cSlate900
-                                : AppColors.cSlate50)),
-                      borderRadius: BorderRadius.circular(16),
-                      elevation: isSelected ? 4 : 0,
-                      shadowColor: Colors.black26,
-                      child: InkWell(
-                        onTap: onTap,
-                        onLongPress: onLongPress,
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          height: 88.0,
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.cBrand600
-                                  : (isDark
-                                        ? AppColors.cDarkBorder
-                                        : AppColors.cSlate200),
-                              width: isSelected ? 2.5 : 1.5,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Row(
-                            children: [
-                              GestureDetector(
-                                onTap: onToggle,
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.cBrand600.withValues(
-                                      alpha: 0.1,
-                                    ),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    parent.isCollapsed
-                                        ? Icons.chevron_right_rounded
-                                        : Icons.expand_more_rounded,
-                                    color: AppColors.cBrand600,
-                                    size: 22,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12.0,
-                                  ),
-                                  child: isSimple
-                                      ? _buildSimpleLayout(hasActions)
-                                      : _buildDefaultLayout(hasActions),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (hasActions)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: actions!,
-                        ),
-                      ),
-                  ],
+    return Container(
+      // 최상위 컨테이너에 상하 테두리 적용하여 가로로 길게 늘림
+      decoration: BoxDecoration(
+        border: isSelected
+            ? const Border(
+                top: BorderSide(color: AppColors.cBrand600, width: 2.0),
+                bottom: BorderSide(color: AppColors.cBrand600, width: 2.0),
+              )
+            : Border(
+                bottom: BorderSide(
+                  color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
+                  width: 0.8,
                 ),
               ),
-            ],
-          ),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: CardListUtils.buildDepthSpacers(parent.groupDepth),
+            ),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onToggle,
+                child: Container(
+                  width: 28,
+                  alignment: Alignment.center,
+                  child: Icon(
+                    parent.isCollapsed
+                        ? Icons.chevron_right_rounded
+                        : Icons.expand_more_rounded,
+                    color: AppColors.cBrand600,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              width: 1.5,
+              color: AppColors.cBrand600.withValues(alpha: 0.5),
+            ),
+            Expanded(
+              child: InkWell(
+                onTap: onTap,
+                onDoubleTap: () {},
+                onLongPress: onLongPress,
+                child: Ink(
+                  decoration: BoxDecoration(
+                    color: parent.isFlagged
+                        ? (isDark
+                              ? const Color(0xFFFFFF00).withValues(alpha: 0.1)
+                              : const Color(0xFFFFF9C4))
+                        : (isDark ? AppColors.cSlate900 : AppColors.cSlate50),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Stack(
+                      children: [
+                        Container(
+                          constraints: const BoxConstraints(minHeight: 85),
+                          padding: const EdgeInsets.all(12),
+                          child: isSimple
+                              ? _buildSimpleLayout(hasActions)
+                              : _buildDefaultLayout(hasActions),
+                        ),
+                        if (hasActions)
+                          Positioned(
+                            top: 6,
+                            right: 0,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: actions!
+                                  .map(
+                                    (action) => GestureDetector(
+                                      onTap: () {},
+                                      behavior: HitTestBehavior.opaque,
+                                      child: action,
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -319,7 +317,6 @@ class FlashcardFolderHeader extends StatelessWidget {
   Widget _buildDefaultLayout(bool hasActions) {
     return Column(
       children: [
-        // 1️⃣ 상단 50% 영역 (Index + Key)
         Expanded(
           child: Align(
             alignment: Alignment.bottomLeft,
@@ -366,7 +363,6 @@ class FlashcardFolderHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        // 2️⃣ 하단 50% 영역 (Front | Back)
         Expanded(
           child: Align(
             alignment: Alignment.topLeft,
@@ -417,7 +413,6 @@ class FlashcardFolderHeader extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1️⃣ 상단 Row (Index + Front + Icons)
         Row(
           children: [
             SizedBox(
@@ -464,7 +459,6 @@ class FlashcardFolderHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        // 2️⃣ 하단 Row (Back) - 위쪽 Front 텍스트와 시작점 일치시킴
         Padding(
           padding: const EdgeInsets.only(left: indexWidth + spacing),
           child: Text(
@@ -496,7 +490,6 @@ class FlashcardListItem extends StatelessWidget {
   final double opacity;
   final bool isParent;
   final VoidCallback? onLongPress;
-
   final bool isSimple;
 
   const FlashcardListItem({
@@ -519,80 +512,87 @@ class FlashcardListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     bool hasActions = actions != null && actions!.isNotEmpty;
 
-    return Transform.scale(
-      scale: scale,
-      child: Opacity(
-        opacity: opacity,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: Row(
-            children: [
-              CardListUtils.buildDepthSpacers(card.groupDepth),
-              if (isParent) CardListUtils.buildDepthSpacers(1),
-              Expanded(
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Material(
-                      color: (card.isFlagged
-                          ? (isDark
-                                ? const Color(0xFFFFFF00).withValues(alpha: 0.1)
-                                : const Color(0xFFFFF9C4))
-                          : (isDark
-                                ? AppColors.cSlate900
-                                : AppColors.cSlate50)),
-                      borderRadius: BorderRadius.circular(16),
-                      elevation: isSelected ? 4 : 0,
-                      shadowColor: Colors.black26,
-                      child: InkWell(
-                        onTap: onTap,
-                        onLongPress: onLongPress,
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          height: 88.0,
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: isSelected
-                                  ? AppColors.cBrand600
-                                  : (isDark
-                                        ? AppColors.cDarkBorder
-                                        : AppColors.cSlate200),
-                              width: isSelected ? 2.5 : 1.5,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12.0,
-                                  ),
-                                  child: isSimple
-                                      ? _buildSimpleLayout(hasActions)
-                                      : _buildDefaultLayout(hasActions),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (hasActions)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: actions!,
-                        ),
-                      ),
-                  ],
+    return Container(
+      // 최상위 컨테이너에 상하 테두리 적용하여 가로로 길게 늘림
+      decoration: BoxDecoration(
+        border: isSelected
+            ? const Border(
+                top: BorderSide(color: AppColors.cBrand600, width: 2.0),
+                bottom: BorderSide(color: AppColors.cBrand600, width: 2.0),
+              )
+            : Border(
+                bottom: BorderSide(
+                  color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
+                  width: 0.8,
                 ),
               ),
-            ],
-          ),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CardListUtils.buildDepthSpacers(card.groupDepth),
+                  if (isParent) CardListUtils.buildDepthSpacers(1),
+                ],
+              ),
+            ),
+            Container(
+              width: 1,
+              color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
+            ),
+            Expanded(
+              child: InkWell(
+                onTap: onTap,
+                onDoubleTap: () {},
+                onLongPress: onLongPress,
+                child: Ink(
+                  decoration: BoxDecoration(
+                    color: card.isFlagged
+                        ? (isDark
+                              ? const Color(0xFFFFFF00).withValues(alpha: 0.1)
+                              : const Color(0xFFFFF9C4))
+                        : (isDark ? AppColors.cSlate900 : AppColors.cSlate50),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Stack(
+                      children: [
+                        Container(
+                          constraints: const BoxConstraints(minHeight: 85),
+                          padding: const EdgeInsets.all(12),
+                          child: isSimple
+                              ? _buildSimpleLayout(hasActions)
+                              : _buildDefaultLayout(hasActions),
+                        ),
+                        if (hasActions)
+                          Positioned(
+                            top: 6,
+                            right: 0,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: actions!
+                                  .map(
+                                    (action) => GestureDetector(
+                                      onTap: () {},
+                                      behavior: HitTestBehavior.opaque,
+                                      child: action,
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -620,7 +620,6 @@ class FlashcardListItem extends StatelessWidget {
   Widget _buildDefaultLayout(bool hasActions) {
     return Column(
       children: [
-        // 1️⃣ 상단 50% 영역 (Index + Key)
         Expanded(
           child: Align(
             alignment: Alignment.bottomLeft,
@@ -667,7 +666,6 @@ class FlashcardListItem extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        // 2️⃣ 하단 50% 영역 (Front | Back)
         Expanded(
           child: Align(
             alignment: Alignment.topLeft,
@@ -717,7 +715,6 @@ class FlashcardListItem extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1️⃣ 상단 Row (Index + Front + Icons)
         Row(
           children: [
             SizedBox(
@@ -763,7 +760,6 @@ class FlashcardListItem extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        // 2️⃣ 하단 Row (Back) - 위쪽 Front 텍스트와 시작점 일치시킴
         Padding(
           padding: const EdgeInsets.only(left: indexWidth),
           child: Text(

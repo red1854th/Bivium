@@ -523,9 +523,11 @@ class _ItemsTabState extends State<ItemsTab> {
           borderRadius: BorderRadius.circular(10),
           child: InkWell(
             onTap: () async {
-              setState(() {
-                card.isFlagged = !card.isFlagged;
-              });
+              // 1. 내부 데이터만 변경 (setState를 최소화하거나 로컬 위젯 수준으로 격리)
+              card.isFlagged = !card.isFlagged;
+
+              // 2. UI만 갱신 (스크롤 컨트롤러에 영향을 주지 않도록 주의)
+              setState(() {});
 
               if (widget.driveService != null) {
                 try {
@@ -535,7 +537,7 @@ class _ItemsTabState extends State<ItemsTab> {
                     setInfo: widget.setInfo,
                     card: card,
                   );
-                  // 부모 데이터 동기화
+                  // 3. 부모에게 알리되, 여기서 리스트를 다시 그리는 _updateDisplayItems()는 호출하지 않도록 주의
                   widget.onCardsUpdated?.call(widget.cards, originalIndex);
                 } catch (e) {
                   debugPrint('Flag 동기화 실패: $e');
