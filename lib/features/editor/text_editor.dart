@@ -5,7 +5,7 @@ import 'highlight_rules.dart';
 class TextEditor extends StatefulWidget {
   final ZebraHighlightController controller;
   final FocusNode focusNode;
-  final UndoHistoryController? undoController; // 전달받은 컨트롤러
+  final UndoHistoryController? undoController;
   final ValueChanged<String> onChanged;
   final double fontSize;
   final double lineHeight;
@@ -40,7 +40,7 @@ class _TextEditorState extends State<TextEditor> {
     return TextField(
       controller: widget.controller,
       focusNode: widget.focusNode,
-      undoController: widget.undoController, // [필수] 이 부분이 연결되어야 작동함
+      undoController: widget.undoController,
       maxLines: null,
       expands: true,
       textAlignVertical: TextAlignVertical.center,
@@ -67,54 +67,61 @@ class ZebraHighlightController extends TextEditingController {
     required bool withComposing,
   }) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color zebraColor = isDark
-        ? Colors.white.withAlpha(15)
-        : Colors.black.withAlpha(10);
+    final Color bulletColor = isDark
+        ? Colors.white.withAlpha(100)
+        : Colors.black.withAlpha(80);
 
-    // 2. 등록된 언어 이름('game_tags')으로 파싱
+    final double baseFontSize = style?.fontSize ?? 14.0;
+    // 폰트 크기에 비례하는 불릿 크기 설정
+    final double bulletSize = (baseFontSize * 0.18) * 1.25;
+
     final highlightResult = highlight.parse(text, language: 'game_tags');
     final List<TextSpan> allSpans = _convertNodes(
       highlightResult.nodes!,
       style,
     );
 
-    final List<TextSpan> zebraSpans = [];
-    final List<TextSpan> currentLineSpans = [];
-    int lineIndex = 0;
-
-    void flushLine() {
-      final bool isEven = lineIndex % 2 == 1;
-      final TextStyle? lineStyle = isEven
-          ? style?.copyWith(backgroundColor: zebraColor)
-          : style;
-
-      zebraSpans.add(
-        TextSpan(style: lineStyle, children: List.from(currentLineSpans)),
-      );
-      currentLineSpans.clear();
-      lineIndex++;
-    }
+    final List<InlineSpan> finalSpans = [];
 
     for (var span in allSpans) {
       final String spanText = span.text ?? '';
       if (spanText.isEmpty) continue;
 
-      final List<String> parts = spanText.split('\n');
-      for (int i = 0; i < parts.length; i++) {
-        if (parts[i].isNotEmpty) {
-          currentLineSpans.add(TextSpan(text: parts[i], style: span.style));
-        }
-        if (i < parts.length - 1) {
-          currentLineSpans.add(const TextSpan(text: '\n'));
-          flushLine();
+      for (int i = 0; i < spanText.length; i++) {
+        final String char = spanText[i];
+
+        if (char == ' ') {
+          // 띄어쓰기 불릿: WidgetSpan을 사용해 물리적 공간 확보 및 중앙 배치
+          finalSpans.add(
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: SizedBox(
+                width: baseFontSize * 0.4, // 띄어쓰기 너비
+                child: Transform.translate(
+                  // 폰트 크기에 비례하여 높이(dy) 조정
+                  offset: Offset(0, (baseFontSize * 0.08)),
+                  child: Center(
+                    child: Container(
+                      width: bulletSize,
+                      height: bulletSize,
+                      decoration: BoxDecoration(
+                        color: bulletColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        } else {
+          // 개행(\n) 및 일반 문자: 별도 처리 없이 원래 로직대로 추가
+          finalSpans.add(TextSpan(text: char, style: span.style));
         }
       }
     }
-    if (currentLineSpans.isNotEmpty || text.endsWith('\n')) {
-      flushLine();
-    }
 
-    return TextSpan(style: style, children: zebraSpans);
+    return TextSpan(style: style, children: finalSpans);
   }
 
   List<TextSpan> _convertNodes(List<Node> nodes, TextStyle? baseStyle) {
