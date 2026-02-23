@@ -71,9 +71,9 @@ class ZebraHighlightController extends TextEditingController {
         ? Colors.white.withAlpha(100)
         : Colors.black.withAlpha(80);
 
-    final double baseFontSize = style?.fontSize ?? 14.0;
-    // 폰트 크기에 비례하는 불릿 크기 설정
-    final double bulletSize = (baseFontSize * 0.18) * 1.25;
+    final double baseFontSize = style?.fontSize ?? 19.0;
+    // 폰트 크기에 비례하는 불릿 크기 (고정폭 폰트에서도 일정한 비율 유지)
+    final double bulletSize = baseFontSize * 0.22;
 
     final highlightResult = highlight.parse(text, language: 'game_tags');
     final List<TextSpan> allSpans = _convertNodes(
@@ -91,23 +91,20 @@ class ZebraHighlightController extends TextEditingController {
         final String char = spanText[i];
 
         if (char == ' ') {
-          // 띄어쓰기 불릿: WidgetSpan을 사용해 물리적 공간 확보 및 중앙 배치
+          // 1. 공백 1글자를 정확히 1개의 WidgetSpan으로 치환 (인덱스 보존)
           finalSpans.add(
             WidgetSpan(
               alignment: PlaceholderAlignment.middle,
               child: SizedBox(
-                width: baseFontSize * 0.4, // 띄어쓰기 너비
-                child: Transform.translate(
-                  // 폰트 크기에 비례하여 높이(dy) 조정
-                  offset: Offset(0, (baseFontSize * 0.08)),
-                  child: Center(
-                    child: Container(
-                      width: bulletSize,
-                      height: bulletSize,
-                      decoration: BoxDecoration(
-                        color: bulletColor,
-                        shape: BoxShape.circle,
-                      ),
+                // 중요: 폰트의 실제 공백 너비 비율(약 0.3~0.4)을 강제 고정
+                width: baseFontSize * 0.4,
+                child: Center(
+                  child: Container(
+                    width: bulletSize,
+                    height: bulletSize,
+                    decoration: BoxDecoration(
+                      color: bulletColor,
+                      shape: BoxShape.circle,
                     ),
                   ),
                 ),
@@ -115,7 +112,7 @@ class ZebraHighlightController extends TextEditingController {
             ),
           );
         } else {
-          // 개행(\n) 및 일반 문자: 별도 처리 없이 원래 로직대로 추가
+          // 2. 일반 문자 및 개행은 기존 스타일 그대로 유지
           finalSpans.add(TextSpan(text: char, style: span.style));
         }
       }

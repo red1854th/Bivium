@@ -260,15 +260,25 @@ class FlashcardFolderHeader extends StatelessWidget {
                     child: Stack(
                       children: [
                         Container(
-                          constraints: const BoxConstraints(minHeight: 85),
-                          padding: const EdgeInsets.all(12),
+                          constraints: isSimple
+                              ? null
+                              : const BoxConstraints(minHeight: 85),
+                          padding: EdgeInsets.only(
+                            left: isSimple ? 8 : 12,
+                            top: isSimple ? 6 : 12,
+                            bottom: isSimple ? 6 : 12,
+                            right: hasActions
+                                ? (isSimple ? 60 : 12)
+                                : (isSimple ? 8 : 12),
+                          ),
                           child: isSimple
                               ? _buildSimpleLayout(hasActions)
                               : _buildDefaultLayout(hasActions),
                         ),
                         if (hasActions)
                           Positioned(
-                            top: 6,
+                            top: isSimple ? 0 : 6,
+                            bottom: isSimple ? 0 : null,
                             right: 0,
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -326,7 +336,7 @@ class FlashcardFolderHeader extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Padding(
-                    padding: EdgeInsets.only(right: hasActions ? 75 : 0),
+                    padding: EdgeInsets.only(right: hasActions ? 60 : 0),
                     child: Text(
                       parent.key,
                       style: TextStyle(
@@ -406,72 +416,60 @@ class FlashcardFolderHeader extends StatelessWidget {
   }
 
   Widget _buildSimpleLayout(bool hasActions) {
-    const double indexWidth = 48.0;
-    const double spacing = 0.0;
-
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        Row(
-          children: [
-            SizedBox(
-              width: indexWidth,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: _buildIndexBadge(),
-              ),
+        _buildIndexBadge(),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            parent.front.replaceAll('\n', ' '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : AppColors.cSlate900,
             ),
-            const SizedBox(width: spacing),
-            Expanded(
-              child: Text(
-                parent.front.replaceAll('\n', ' '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : AppColors.cSlate900,
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ),
-            if (!hasActions) ...[
-              if (parent.remark.isNotEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(left: 4),
-                  child: Icon(
-                    Icons.history_edu_rounded,
-                    size: 16,
-                    color: AppColors.cBrand600,
-                  ),
-                ),
-              if (parent.isFlagged)
-                const Padding(
-                  padding: EdgeInsets.only(left: 4),
-                  child: Icon(
-                    Icons.flag_rounded,
-                    size: 16,
-                    color: Colors.orange,
-                  ),
-                ),
-            ],
-          ],
+          ),
         ),
-        const SizedBox(height: 4),
         Padding(
-          padding: const EdgeInsets.only(left: indexWidth + spacing),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Text(
+            '|',
+            style: TextStyle(
+              color: isDark ? AppColors.cSlate600 : AppColors.cSlate300,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        Expanded(
           child: Text(
             parent.back.replaceAll('\n', ' '),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
               fontWeight: FontWeight.w500,
             ),
           ),
         ),
+        if (!hasActions) ...[
+          if (parent.remark.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.only(left: 4),
+              child: Icon(
+                Icons.history_edu_rounded,
+                size: 14,
+                color: AppColors.cBrand600,
+              ),
+            ),
+          if (parent.isFlagged)
+            const Padding(
+              padding: EdgeInsets.only(left: 4),
+              child: Icon(Icons.flag_rounded, size: 14, color: Colors.orange),
+            ),
+        ],
       ],
     );
   }
@@ -563,15 +561,25 @@ class FlashcardListItem extends StatelessWidget {
                     child: Stack(
                       children: [
                         Container(
-                          constraints: const BoxConstraints(minHeight: 85),
-                          padding: const EdgeInsets.all(12),
+                          constraints: isSimple
+                              ? null
+                              : const BoxConstraints(minHeight: 85),
+                          padding: EdgeInsets.only(
+                            left: isSimple ? 8 : 12,
+                            top: isSimple ? 6 : 12,
+                            bottom: isSimple ? 6 : 12,
+                            right: hasActions
+                                ? (isSimple ? 60 : 12)
+                                : (isSimple ? 8 : 12),
+                          ),
                           child: isSimple
                               ? _buildSimpleLayout(hasActions)
                               : _buildDefaultLayout(hasActions),
                         ),
                         if (hasActions)
                           Positioned(
-                            top: 6,
+                            top: isSimple ? 0 : 6,
+                            bottom: isSimple ? 0 : null,
                             right: 0,
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -629,7 +637,7 @@ class FlashcardListItem extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Padding(
-                    padding: EdgeInsets.only(right: hasActions ? 75 : 0),
+                    padding: EdgeInsets.only(right: hasActions ? 60 : 0),
                     child: Text(
                       card.key,
                       style: TextStyle(
@@ -709,82 +717,73 @@ class FlashcardListItem extends StatelessWidget {
   }
 
   Widget _buildSimpleLayout(bool hasActions) {
-    const double indexWidth = 48.0;
-
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        Row(
-          children: [
-            SizedBox(
-              width: indexWidth,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: _buildIndexBadge(),
-              ),
+        _buildIndexBadge(),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            card.front.replaceAll('\n', ' '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: isDark ? Colors.white : AppColors.cSlate900,
             ),
-            Expanded(
-              child: Text(
-                card.front.replaceAll('\n', ' '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : AppColors.cSlate900,
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ),
-            if (!hasActions) ...[
-              if (card.remark.isNotEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(left: 4),
-                  child: Icon(
-                    Icons.history_edu_rounded,
-                    size: 16,
-                    color: AppColors.cBrand600,
-                  ),
-                ),
-              if (card.isFlagged)
-                const Padding(
-                  padding: EdgeInsets.only(left: 4),
-                  child: Icon(
-                    Icons.flag_rounded,
-                    size: 16,
-                    color: Colors.orange,
-                  ),
-                ),
-            ],
-          ],
+          ),
         ),
-        const SizedBox(height: 4),
         Padding(
-          padding: const EdgeInsets.only(left: indexWidth),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Text(
+            '|',
+            style: TextStyle(
+              color: isDark ? AppColors.cSlate600 : AppColors.cSlate300,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        Expanded(
           child: Text(
             card.back.replaceAll('\n', ' '),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
               fontWeight: FontWeight.w500,
             ),
           ),
         ),
+        if (!hasActions) ...[
+          if (card.remark.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.only(left: 4),
+              child: Icon(
+                Icons.history_edu_rounded,
+                size: 14,
+                color: AppColors.cBrand600,
+              ),
+            ),
+          if (card.isFlagged)
+            const Padding(
+              padding: EdgeInsets.only(left: 4),
+              child: Icon(Icons.flag_rounded, size: 14, color: Colors.orange),
+            ),
+        ],
       ],
     );
   }
 }
 
 // --- Widgets: 검색 필드 ---
-class CardSearchField extends StatelessWidget {
+class CardSearchField extends StatefulWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final bool isDark;
   final bool isPinned;
   final VoidCallback onPinToggled;
+  final bool showCompactToggle;
 
   const CardSearchField({
     super.key,
@@ -793,7 +792,35 @@ class CardSearchField extends StatelessWidget {
     required this.isDark,
     required this.isPinned,
     required this.onPinToggled,
+    this.showCompactToggle = false,
   });
+
+  @override
+  State<CardSearchField> createState() => _CardSearchFieldState();
+}
+
+class _CardSearchFieldState extends State<CardSearchField> {
+  bool _isCompact = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isCompact = CompactModeManager().isCompact;
+    CompactModeManager().addListener(_onCompactChanged);
+  }
+
+  void _onCompactChanged() {
+    final compact = CompactModeManager().isCompact;
+    if (_isCompact != compact) {
+      setState(() => _isCompact = compact);
+    }
+  }
+
+  @override
+  void dispose() {
+    CompactModeManager().removeListener(_onCompactChanged);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -803,22 +830,24 @@ class CardSearchField extends StatelessWidget {
         children: [
           Expanded(
             child: TextField(
-              controller: controller,
-              onChanged: onChanged,
+              controller: widget.controller,
+              onChanged: widget.onChanged,
               decoration: InputDecoration(
                 hintText: "search".tr(),
                 prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: controller.text.isNotEmpty
+                suffixIcon: widget.controller.text.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear, size: 18),
                         onPressed: () {
-                          controller.clear();
-                          onChanged('');
+                          widget.controller.clear();
+                          widget.onChanged('');
                         },
                       )
                     : null,
                 filled: true,
-                fillColor: isDark ? AppColors.cSlate800 : AppColors.cSlate100,
+                fillColor: widget.isDark
+                    ? AppColors.cSlate800
+                    : AppColors.cSlate100,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -829,32 +858,66 @@ class CardSearchField extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Material(
-            color: isPinned
+            color: widget.isPinned
                 ? AppColors.cBrand600.withValues(alpha: 0.15)
-                : (isDark ? AppColors.cSlate800 : AppColors.cSlate100),
+                : (widget.isDark ? AppColors.cSlate800 : AppColors.cSlate100),
             borderRadius: BorderRadius.circular(12),
             child: InkWell(
-              onTap: onPinToggled,
+              onTap: widget.onPinToggled,
               borderRadius: BorderRadius.circular(12),
               child: Container(
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  border: isPinned
+                  border: widget.isPinned
                       ? Border.all(color: AppColors.cBrand600, width: 1.5)
                       : null,
                 ),
                 child: Icon(
-                  isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+                  widget.isPinned
+                      ? Icons.push_pin_rounded
+                      : Icons.push_pin_outlined,
                   size: 20,
-                  color: isPinned
+                  color: widget.isPinned
                       ? AppColors.cBrand600
-                      : (isDark ? Colors.white38 : Colors.black38),
+                      : (widget.isDark ? Colors.white38 : Colors.black38),
                 ),
               ),
             ),
           ),
+          if (widget.showCompactToggle) ...[
+            const SizedBox(width: 8),
+            Material(
+              color: _isCompact
+                  ? AppColors.cBrand600.withValues(alpha: 0.15)
+                  : (widget.isDark ? AppColors.cSlate800 : AppColors.cSlate100),
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                onTap: () => CompactModeManager().toggle(),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: _isCompact
+                        ? Border.all(color: AppColors.cBrand600, width: 1.5)
+                        : null,
+                  ),
+                  child: Icon(
+                    _isCompact
+                        ? Icons.view_headline_rounded
+                        : Icons.view_agenda_rounded,
+                    size: 20,
+                    color: _isCompact
+                        ? AppColors.cBrand600
+                        : (widget.isDark ? Colors.white38 : Colors.black38),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -894,4 +957,28 @@ class SearchManager extends ChangeNotifier {
       notifyListeners();
     }
   }
+}
+
+// --- Manager: 컴팩트 모드 상태 관리 ---
+class CompactModeManager extends ChangeNotifier {
+  static final CompactModeManager _instance = CompactModeManager._internal();
+  factory CompactModeManager() => _instance;
+  CompactModeManager._internal();
+
+  bool _isCompact = false;
+
+  bool get isCompact => _isCompact;
+
+  void toggle() {
+    _isCompact = !_isCompact;
+    notifyListeners();
+  }
+
+  void set(bool value) {
+    if (_isCompact == value) return;
+    _isCompact = value;
+    notifyListeners();
+  }
+
+  bool isSimple(int keyColIdx) => keyColIdx == -1 || _isCompact;
 }

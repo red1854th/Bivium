@@ -31,10 +31,11 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
   late FixedExtentScrollController _wheelController;
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchPinned = false;
+  bool _isCompact = false;
 
   List<dynamic> _displayItems = [];
   double _scrollOffset = 0.0;
-  final double _itemExtent = 95.0;
+  double get _itemExtent => _isCompact ? 44.0 : 95.0;
   int _selectedDisplayIndex = 0;
   bool _hasChanges = false; // 폴더 접기/펼치기 변경사항 추적
 
@@ -48,6 +49,9 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
       _searchController.text = searchMgr.query;
     }
     searchMgr.addListener(_onSearchManagerChanged);
+
+    _isCompact = CompactModeManager().isCompact;
+    CompactModeManager().addListener(_onCompactModeChanged);
 
     _updateDisplayItems();
 
@@ -156,9 +160,36 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
     }
   }
 
+  void _onCompactModeChanged() {
+    final compact = CompactModeManager().isCompact;
+    if (_isCompact != compact) {
+      final currentIdx = _wheelController.hasClients
+          ? _wheelController.selectedItem
+          : _selectedDisplayIndex;
+
+      final oldController = _wheelController;
+      _wheelController = FixedExtentScrollController(initialItem: currentIdx);
+      _wheelController.addListener(_scrollListener);
+
+      setState(() {
+        _isCompact = compact;
+        _selectedDisplayIndex = currentIdx;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_wheelController.hasClients) {
+          _wheelController.jumpToItem(currentIdx);
+        }
+        oldController.removeListener(_scrollListener);
+        oldController.dispose();
+      });
+    }
+  }
+
   @override
   void dispose() {
     SearchManager().removeListener(_onSearchManagerChanged);
+    CompactModeManager().removeListener(_onCompactModeChanged);
     _wheelController.removeListener(_scrollListener);
     _wheelController.dispose();
     _searchController.dispose();
@@ -190,6 +221,7 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
                 isDark: isDark,
                 isPinned: _isSearchPinned,
                 onPinToggled: _onPinToggled,
+                showCompactToggle: true,
               ),
               Expanded(
                 child: LayoutBuilder(
@@ -199,6 +231,7 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
                         _displayItems.isEmpty
                             ? Center(child: Text("no_search_results".tr()))
                             : ListWheelScrollView.useDelegate(
+                                key: ValueKey(_isCompact),
                                 controller: _wheelController,
                                 itemExtent: _itemExtent,
                                 physics: const FixedExtentScrollPhysics(),
@@ -279,7 +312,7 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
       originalIndex: originalIdx,
       isSelected: _selectedDisplayIndex == index,
       isDark: isDark,
-      isSimple: widget.setInfo.keyColIdx == -1,
+      isSimple: CompactModeManager().isSimple(widget.setInfo.keyColIdx),
       scale: math.max(0.85, 1.0 - (offset * 0.05)),
       opacity: math.max(0.4, 1.0 - (offset * 0.2)),
       onTap: () {
@@ -334,7 +367,7 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
       isSelected: _selectedDisplayIndex == index,
       isDark: isDark,
       isParent: _checkHasChildren(originalIndex),
-      isSimple: widget.setInfo.keyColIdx == -1,
+      isSimple: CompactModeManager().isSimple(widget.setInfo.keyColIdx),
       scale: math.max(0.85, 1.0 - (offset * 0.05)),
       opacity: math.max(0.4, 1.0 - (offset * 0.2)),
       onTap: () {

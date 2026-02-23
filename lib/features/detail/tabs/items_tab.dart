@@ -34,9 +34,10 @@ class _ItemsTabState extends State<ItemsTab> {
   late FixedExtentScrollController _wheelController;
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchPinned = false;
+  bool _isCompact = false;
 
   List<dynamic> _displayItems = [];
-  final double _itemExtent = 95.0;
+  double get _itemExtent => _isCompact ? 44.0 : 95.0;
   int _selectedDisplayIndex = 0;
   int _currentCardIndex = 0;
   int _exceptionIndex = 0;
@@ -52,6 +53,9 @@ class _ItemsTabState extends State<ItemsTab> {
     }
 
     searchMgr.addListener(_onSearchManagerChanged);
+
+    _isCompact = CompactModeManager().isCompact;
+    CompactModeManager().addListener(_onCompactModeChanged);
 
     _updateDisplayItems();
 
@@ -79,9 +83,36 @@ class _ItemsTabState extends State<ItemsTab> {
     }
   }
 
+  void _onCompactModeChanged() {
+    final compact = CompactModeManager().isCompact;
+    if (_isCompact != compact) {
+      final currentIdx = _wheelController.hasClients
+          ? _wheelController.selectedItem
+          : _selectedDisplayIndex;
+
+      final oldController = _wheelController;
+      _wheelController = FixedExtentScrollController(initialItem: currentIdx);
+      _wheelController.addListener(_scrollListener);
+
+      setState(() {
+        _isCompact = compact;
+        _selectedDisplayIndex = currentIdx;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_wheelController.hasClients) {
+          _wheelController.jumpToItem(currentIdx);
+        }
+        oldController.removeListener(_scrollListener);
+        oldController.dispose();
+      });
+    }
+  }
+
   @override
   void dispose() {
     SearchManager().removeListener(_onSearchManagerChanged);
+    CompactModeManager().removeListener(_onCompactModeChanged);
     _wheelController.removeListener(_scrollListener);
     _wheelController.dispose();
     _searchController.dispose();
@@ -188,6 +219,7 @@ class _ItemsTabState extends State<ItemsTab> {
                 isDark: isDark,
                 isPinned: _isSearchPinned,
                 onPinToggled: _onPinToggled,
+                showCompactToggle: true,
               ),
               Expanded(
                 child: LayoutBuilder(
@@ -220,6 +252,7 @@ class _ItemsTabState extends State<ItemsTab> {
                         Padding(
                           padding: const EdgeInsets.only(right: 6),
                           child: RawScrollbar(
+                            key: ValueKey(_isCompact),
                             controller: _wheelController,
                             minThumbLength: 40.0,
                             mainAxisMargin: 4.0,
@@ -232,6 +265,7 @@ class _ItemsTabState extends State<ItemsTab> {
                             interactive: true,
                             pressDuration: Duration.zero,
                             child: ListWheelScrollView.useDelegate(
+                              key: ValueKey(_isCompact),
                               controller: _wheelController,
                               itemExtent: _itemExtent,
                               physics: const FixedExtentScrollPhysics(),
@@ -333,15 +367,15 @@ class _ItemsTabState extends State<ItemsTab> {
       originalIndex: originalIdx,
       isSelected: _selectedDisplayIndex == index,
       isDark: isDark,
-      isSimple: widget.setInfo.keyColIdx == -1,
+      isSimple: CompactModeManager().isSimple(widget.setInfo.keyColIdx),
       onTap: () => _goToEditPage(originalIdx), // 바디 클릭: 편집기로 이동
       actions: [
         // Remark 버튼
         Material(
           color: parent.remark.isNotEmpty
-              ? AppColors.cBrand600.withValues(alpha: 0.15)
+              ? AppColors.cBrand600.withValues(alpha: 0.12)
               : idleBtnColor,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(4),
           child: InkWell(
             onTap: () async {
               final result = await Navigator.push(
@@ -366,12 +400,12 @@ class _ItemsTabState extends State<ItemsTab> {
                 widget.onCardsUpdated?.call(widget.cards, originalIdx);
               }
             },
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(4),
             child: Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(6),
               child: Icon(
                 Icons.history_edu_rounded,
-                size: 20,
+                size: 18,
                 color: parent.remark.isNotEmpty
                     ? AppColors.cBrand600
                     : (isDark ? Colors.white38 : Colors.grey),
@@ -379,13 +413,13 @@ class _ItemsTabState extends State<ItemsTab> {
             ),
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 4),
         // Flag 버튼
         Material(
           color: parent.isFlagged
-              ? Colors.orange.withValues(alpha: 0.15)
+              ? Colors.orange.withValues(alpha: 0.12)
               : idleBtnColor,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(4),
           child: InkWell(
             onTap: () async {
               setState(() {
@@ -406,12 +440,12 @@ class _ItemsTabState extends State<ItemsTab> {
                 }
               }
             },
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(4),
             child: Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(6),
               child: Icon(
                 parent.isFlagged ? Icons.flag_rounded : Icons.flag_outlined,
-                size: 20,
+                size: 18,
                 color: parent.isFlagged
                     ? Colors.orange
                     : (isDark ? Colors.white38 : Colors.grey),
@@ -467,15 +501,15 @@ class _ItemsTabState extends State<ItemsTab> {
       isSelected: _selectedDisplayIndex == index,
       isDark: isDark,
       isParent: _checkHasChildren(originalIndex),
-      isSimple: widget.setInfo.keyColIdx == -1,
+      isSimple: CompactModeManager().isSimple(widget.setInfo.keyColIdx),
       onTap: () => _goToEditPage(originalIndex),
       actions: [
         // Remark 버튼
         Material(
           color: card.remark.isNotEmpty
-              ? AppColors.cBrand600.withValues(alpha: 0.15)
+              ? AppColors.cBrand600.withValues(alpha: 0.12)
               : idleBtnColor,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(4),
           child: InkWell(
             onTap: () async {
               final result = await Navigator.push(
@@ -501,12 +535,12 @@ class _ItemsTabState extends State<ItemsTab> {
                 widget.onCardsUpdated?.call(widget.cards, originalIndex);
               }
             },
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(4),
             child: Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(6),
               child: Icon(
                 Icons.history_edu_rounded,
-                size: 20,
+                size: 18,
                 color: card.remark.isNotEmpty
                     ? AppColors.cBrand600
                     : (isDark ? Colors.white38 : Colors.grey),
@@ -514,19 +548,16 @@ class _ItemsTabState extends State<ItemsTab> {
             ),
           ),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 4),
         // Flag 버튼
         Material(
           color: card.isFlagged
-              ? Colors.orange.withValues(alpha: 0.15)
+              ? Colors.orange.withValues(alpha: 0.12)
               : idleBtnColor,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(4),
           child: InkWell(
             onTap: () async {
-              // 1. 내부 데이터만 변경 (setState를 최소화하거나 로컬 위젯 수준으로 격리)
               card.isFlagged = !card.isFlagged;
-
-              // 2. UI만 갱신 (스크롤 컨트롤러에 영향을 주지 않도록 주의)
               setState(() {});
 
               if (widget.driveService != null) {
@@ -537,19 +568,18 @@ class _ItemsTabState extends State<ItemsTab> {
                     setInfo: widget.setInfo,
                     card: card,
                   );
-                  // 3. 부모에게 알리되, 여기서 리스트를 다시 그리는 _updateDisplayItems()는 호출하지 않도록 주의
                   widget.onCardsUpdated?.call(widget.cards, originalIndex);
                 } catch (e) {
                   debugPrint('Flag 동기화 실패: $e');
                 }
               }
             },
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(4),
             child: Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(6),
               child: Icon(
                 card.isFlagged ? Icons.flag_rounded : Icons.flag_outlined,
-                size: 20,
+                size: 18,
                 color: card.isFlagged
                     ? Colors.orange
                     : (isDark ? Colors.white38 : Colors.grey),
