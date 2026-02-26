@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme.dart';
@@ -12,15 +13,161 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:styled_text/styled_text.dart';
 import 'widgets/easter_egg_dialog.dart';
 import 'home_controller.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../auth/google_login_page.dart';
+
+class ManuscriptLinePainter extends CustomPainter {
+  final bool isHorizontal;
+  final bool isDark;
+  final String seedId;
+
+  ManuscriptLinePainter({
+    required this.isHorizontal,
+    required this.isDark,
+    this.seedId = "",
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double standardWidth = 1.2;
+
+    // 테두리 및 장식선용 Paint (완전 불투명)
+    final linePaint = Paint()
+      ..color = AppColors.cBrand600.withValues(alpha: 1.0)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = standardWidth;
+
+    // 1. 기본 외곽 테두리
+    canvas.drawRect(Offset.zero & size, linePaint);
+
+    // 2. 조건별 테두리 및 장식선
+    if (isHorizontal) {
+      canvas.drawLine(Offset.zero, Offset(0, size.height), linePaint);
+      canvas.drawLine(
+        Offset(size.width, 0),
+        Offset(size.width, size.height),
+        linePaint,
+      );
+      canvas.drawLine(Offset.zero, Offset(size.width, 0), linePaint);
+      canvas.drawLine(const Offset(0, 6), Offset(size.width, 6), linePaint);
+      canvas.drawLine(
+        Offset(0, size.height),
+        Offset(size.width, size.height),
+        linePaint,
+      );
+      canvas.drawLine(
+        Offset(0, size.height - 6),
+        Offset(size.width, size.height - 6),
+        linePaint,
+      );
+    } else {
+      canvas.drawLine(Offset.zero, Offset(size.width, 0), linePaint);
+      canvas.drawLine(
+        Offset(0, size.height),
+        Offset(size.width, size.height),
+        linePaint,
+      );
+      canvas.drawLine(Offset.zero, Offset(0, size.height), linePaint);
+      canvas.drawLine(const Offset(8, 0), Offset(8, size.height), linePaint);
+      canvas.drawLine(
+        Offset(size.width, 0),
+        Offset(size.width, size.height),
+        linePaint,
+      );
+      canvas.drawLine(
+        Offset(size.width - 8, 0),
+        Offset(size.width - 8, size.height),
+        linePaint,
+      );
+    }
+
+    // 3. 패턴 그리기 (연한 브랜드 컬러 적용)
+    if (seedId.isNotEmpty) {
+      final random = Random(seedId.hashCode);
+      final patternPaint = Paint()
+        ..color = AppColors.cBrand600
+            .withValues(alpha: 0.15) // 패턴에만 연하게 처리
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = standardWidth;
+
+      final double paddingLeft = isHorizontal ? 0.0 : 8.5;
+      final double paddingRight = isHorizontal ? 0.0 : 8.5;
+      final double paddingTop = isHorizontal ? 6.5 : 0.0;
+      final double paddingBottom = isHorizontal ? 6.5 : 0.0;
+
+      final double effectiveHeight = size.height - paddingTop - paddingBottom;
+      final double cellSize = effectiveHeight / 4;
+
+      for (int j = 0; j < 4; j++) {
+        final double py = paddingTop + (j * cellSize);
+
+        // 좌측 배치 (4, 3, 2, 1)
+        int leftCount = 4 - j;
+        for (int i = 0; i < leftCount; i++) {
+          final double px = paddingLeft + (i * cellSize);
+          if (px + cellSize <= size.width - paddingRight) {
+            _drawSinglePattern(
+              canvas,
+              random,
+              Offset(px, py),
+              cellSize,
+              patternPaint,
+            );
+          }
+        }
+
+        // 우측 배치 (1, 2, 3, 4)
+        int rightCount = j + 1;
+        for (int i = 0; i < rightCount; i++) {
+          final double px = size.width - paddingRight - ((i + 1) * cellSize);
+          if (px >= paddingLeft) {
+            _drawSinglePattern(
+              canvas,
+              random,
+              Offset(px, py),
+              cellSize,
+              patternPaint,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  void _drawSinglePattern(
+    Canvas canvas,
+    Random random,
+    Offset pos,
+    double size,
+    Paint paint,
+  ) {
+    canvas.save();
+    canvas.translate(pos.dx + size / 2, pos.dy + size / 2);
+    canvas.rotate(random.nextInt(4) * (pi / 2));
+    canvas.drawArc(
+      Rect.fromCenter(
+        center: Offset(-size / 2, -size / 2),
+        width: size * 2,
+        height: size * 2,
+      ),
+      0,
+      pi / 2,
+      false,
+      paint,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant ManuscriptLinePainter oldDelegate) =>
+      oldDelegate.seedId != seedId || oldDelegate.isDark != isDark;
+}
 
 class HomePage extends StatefulWidget {
   final VoidCallback? onThemeChanged;
   final SharedPreferences prefs;
   final GoogleDriveService driveService;
-  final bool initialAuth; // 추가: main에서 받은 초기 인증 상태
+  final bool initialAuth;
 
   const HomePage({
     super.key,
@@ -39,10 +186,7 @@ class _HomePageState extends State<HomePage> {
   late final GoogleDriveService _driveService;
   final TextEditingController _searchController = TextEditingController();
 
-  // 기존 bool _isAuthenticated = false; 를 아래처럼 수정
   late bool _isAuthenticated = widget.initialAuth;
-
-  // 기존 bool _isAuthChecking = true; 를 아래처럼 수정
   late bool _isAuthChecking = !widget.initialAuth;
 
   @override
@@ -52,75 +196,33 @@ class _HomePageState extends State<HomePage> {
     _controller = HomeController(prefs: widget.prefs);
     _controller.addListener(_onControllerChanged);
 
-    // 수정된 로직: 로그인 의향이 있다면 일단 데이터를 로드(낙관적 UI)하고,
-    // 백그라운드에서 실제 세션 유효성을 확인합니다.
     if (_isAuthenticated) {
       _controller.loadData();
-      _driveService.signInSilentlyCheck().then((account) {
-        if (account == null && mounted) {
-          debugPrint("백그라운드 세션 확인 실패 (로그인 유지 시도)");
-          // 더 이상 강제로 _isAuthenticated = false로 전환하지 않습니다.
-          // 실제 데이터 요청 시 401이 발생하면 그때 처리하거나,
-          // currentUser가 null인 상태로 유지되어 필요시 로그인을 요구하게 됩니다.
-        }
-      });
+      _driveService.signInSilentlyCheck();
     } else {
       _checkAuth();
     }
   }
 
-  /// [수정] 앱 실행 시 조용히 로그인을 시도하여 세션을 복구합니다.
   Future<void> _checkAuth() async {
     if (!mounted) return;
-
-    setState(() {
-      _isAuthChecking = true;
-    });
-
+    setState(() => _isAuthChecking = true);
     try {
-      // 1. 기존 로컬 토큰 확인 및 안드로이드 계정 자동 로그인 시도
       final account = await _driveService.signInSilentlyCheck();
-
-      // 2. 계정이 확인되면 인증된 것으로 간주
-      if (account != null) {
-        if (mounted) {
-          setState(() {
-            _isAuthenticated = true;
-          });
-        }
-        // 3. 인증 성공 시 데이터 로드
+      if (account != null && mounted) {
+        setState(() => _isAuthenticated = true);
         await _controller.loadData();
-      } else {
-        // 인증 실패 시 로그인 페이지로 유도
-        if (mounted) {
-          setState(() {
-            _isAuthenticated = false;
-          });
-        }
       }
-    } catch (e) {
-      debugPrint("인증 확인 중 오류 발생: $e");
     } finally {
-      if (mounted) {
-        setState(() {
-          _isAuthChecking = false;
-        });
-      }
+      if (mounted) setState(() => _isAuthChecking = false);
     }
   }
 
-  /// [수정] 수동 로그인 핸들러
   Future<void> _handleLogin() async {
-    try {
-      final account = await _driveService.signIn();
-      if (account != null && mounted) {
-        setState(() {
-          _isAuthenticated = true;
-        });
-        await _controller.loadData();
-      }
-    } catch (e) {
-      debugPrint("로그인 에러: $e");
+    final account = await _driveService.signIn();
+    if (account != null && mounted) {
+      setState(() => _isAuthenticated = true);
+      await _controller.loadData();
     }
   }
 
@@ -135,13 +237,8 @@ class _HomePageState extends State<HomePage> {
     if (mounted) setState(() {});
   }
 
-  // 드래그 중 그림자를 제거하기 위한 데코레이터
   Widget _proxyDecorator(Widget child, int index, Animation<double> animation) {
-    return Material(
-      color: Colors.transparent,
-      elevation: 0, // 그림자 제거
-      child: child,
-    );
+    return Material(color: Colors.transparent, elevation: 0, child: child);
   }
 
   @override
@@ -166,7 +263,11 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           children: [
             _buildAppBar(isDark),
-            Expanded(child: _buildMainContent(isDark)),
+            Expanded(
+              child: _controller.isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _buildMainContent(isDark),
+            ),
           ],
         ),
       ),
@@ -191,14 +292,39 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildMainContent(bool isDark) {
-    if (_controller.isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+  Widget _buildLogo(bool isDark) {
+    return GestureDetector(
+      onTap: () => EasterEggDialog.show(context),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SvgPicture.asset('assets/icon/app_logo.svg', width: 28, height: 28),
+          const SizedBox(width: 12),
+          StyledText(
+            text: "app_name".tr(),
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 20,
+              color: isDark ? Colors.white : AppColors.cSlate900,
+            ),
+            tags: {
+              'sub': StyledTextTag(
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isDark
+                      ? Colors.white70
+                      : AppColors.cSlate900.withValues(alpha: 0.7),
+                ),
+              ),
+            },
+          ),
+        ],
+      ),
+    );
+  }
 
-    if (_controller.sets.isEmpty) {
-      return _buildEmptyState(isDark);
-    }
+  Widget _buildMainContent(bool isDark) {
+    if (_controller.sets.isEmpty) return _buildEmptyState(isDark);
 
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -214,35 +340,104 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildSliverReorderableList(bool isDark) {
-    final filteredSets = _controller.filteredSets;
+  Widget _buildRecentSection(bool isDark) {
+    final recentSets = List<FlashcardSet>.from(_controller.sets)
+      ..sort((a, b) => b.lastAccessed.compareTo(a.lastAccessed));
+    final displayRecent = recentSets
+        .take(8)
+        .where((s) => s.lastAccessed != DateTime.fromMillisecondsSinceEpoch(0))
+        .toList();
 
-    if (filteredSets.isEmpty && _controller.searchQuery.isNotEmpty) {
-      return SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(40.0),
-            child: Text(
-              "no_search_results".tr(),
-              style: TextStyle(color: AppColors.cSlate400),
+    if (displayRecent.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          child: Text(
+            "recent".tr(),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
+              letterSpacing: 1.0,
             ),
           ),
         ),
-      );
-    }
+        SizedBox(
+          height: 120,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: displayRecent.length,
+            itemBuilder: (context, index) =>
+                _buildRecentCard(displayRecent[index], isDark),
+          ),
+        ),
+      ],
+    );
+  }
 
+  Widget _buildRecentCard(FlashcardSet s, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: InkWell(
+        onTap: () => _navigateToDetail(s),
+        child: CustomPaint(
+          painter: ManuscriptLinePainter(
+            isHorizontal: true,
+            isDark: isDark,
+            seedId: s.id,
+          ),
+          child: Container(
+            width: 110,
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '¶',
+                  style: TextStyle(
+                    color: AppColors.cBrand600,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  s.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                    height: 1.2,
+                    color: isDark ? Colors.white : AppColors.cSlate900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSliverReorderableList(bool isDark) {
+    final filteredSets = _controller.filteredSets;
     return SliverReorderableList(
       itemCount: filteredSets.length,
       proxyDecorator: _proxyDecorator,
       onReorder: (oldIndex, newIndex) {
-        if (_controller.isSearching || oldIndex == newIndex) return;
-        _controller.reorderSets(oldIndex, newIndex);
+        if (!_controller.isSearching) {
+          _controller.reorderSets(oldIndex, newIndex);
+        }
       },
       itemBuilder: (context, index) {
         final setItem = filteredSets[index];
-        // 꾹 누르는 기능(DelayedListener)을 제거하고 일반 위젯으로 반환
         return Padding(
-          key: ValueKey('set_${setItem.id}'),
+          key: ValueKey('list_item_${setItem.id}'),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
           child: _buildSetCard(setItem, index, isDark),
         );
@@ -251,42 +446,29 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildSetCard(FlashcardSet s, int index, bool isDark) {
-    return Material(
-      color: isDark ? AppColors.cDarkSurface : Colors.white,
-      borderRadius: BorderRadius.circular(8),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => _navigateToDetail(s),
-        splashColor: AppColors.cBrand600.withValues(alpha: 0.1),
+    return InkWell(
+      onTap: () => _navigateToDetail(s),
+      child: CustomPaint(
+        painter: ManuscriptLinePainter(
+          isHorizontal: false,
+          isDark: isDark,
+          seedId: s.id,
+        ),
         child: Container(
+          height: 60,
+          margin: const EdgeInsets.symmetric(horizontal: 8),
           padding: const EdgeInsets.only(left: 4, right: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
-            ),
-          ),
           child: Row(
             children: [
               if (!_controller.isSearching)
                 ReorderableDragStartListener(
                   index: index,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {},
-                      onTapDown: (_) => HapticFeedback.lightImpact(),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 14,
-                        ),
-                        child: Icon(
-                          Icons.drag_indicator_rounded,
-                          color: AppColors.cSlate300,
-                          size: 20,
-                        ),
-                      ),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Icon(
+                      Icons.drag_indicator_rounded,
+                      color: AppColors.cSlate300,
+                      size: 20,
                     ),
                   ),
                 )
@@ -320,38 +502,6 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildLogo(bool isDark) {
-    return GestureDetector(
-      onTap: () => EasterEggDialog.show(context),
-      behavior: HitTestBehavior.opaque,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SvgPicture.asset('assets/icon/app_logo.svg', width: 28, height: 28),
-          const SizedBox(width: 12),
-          StyledText(
-            text: "app_name".tr(),
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 20,
-              color: isDark ? Colors.white : AppColors.cSlate900,
-            ),
-            tags: {
-              'sub': StyledTextTag(
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isDark
-                      ? Colors.white70
-                      : AppColors.cSlate900.withValues(alpha: 0.7),
-                ),
-              ),
-            },
-          ),
-        ],
       ),
     );
   }
@@ -396,12 +546,8 @@ class _HomePageState extends State<HomePage> {
             color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
           ),
           onPressed: () {
-            if (_controller.isSearching) {
-              _searchController.clear();
-              _controller.setSearching(false);
-            } else {
-              _controller.setSearching(true);
-            }
+            _controller.setSearching(!_controller.isSearching);
+            if (!_controller.isSearching) _searchController.clear();
           },
         ),
         if (!_controller.isSearching)
@@ -411,7 +557,6 @@ class _HomePageState extends State<HomePage> {
               color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
             ),
             onPressed: () async {
-              // 설정 페이지 이동 후 돌아왔을 때 인증 상태를 다시 확인합니다.
               await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -429,157 +574,63 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildListHeader(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      child: SizedBox(
+        height: 32,
+        child: Row(
+          children: [
+            Text(
+              _controller.isSearching
+                  ? "search_results".tr()
+                  : "all_projects".tr(),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
+                letterSpacing: 1.0,
+              ),
+            ),
+            const Spacer(),
+            if (!_controller.isSearching)
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: IconButton(
+                  onPressed: () => _showAddDialog(context),
+                  icon: const Icon(Icons.add, color: Colors.white, size: 18),
+                  padding: EdgeInsets.zero,
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.cBrand600,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmptyState(bool isDark) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.folder_open,
-            size: 48,
-            color: isDark ? AppColors.cSlate600 : AppColors.cSlate300,
-          ),
+          const Icon(Icons.folder_open, size: 48, color: AppColors.cSlate300),
           const SizedBox(height: 16),
           Text(
             "no_projects".tr(),
-            style: TextStyle(color: AppColors.cSlate400),
+            style: const TextStyle(color: AppColors.cSlate400),
           ),
-          const SizedBox(height: 8),
           TextButton(
             onPressed: () => _showAddDialog(context),
             child: Text("create_first".tr()),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildListHeader(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Row(
-        children: [
-          Text(
-            _controller.isSearching
-                ? "search_results".tr()
-                : "all_projects".tr(),
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
-              letterSpacing: 1.0,
-            ),
-          ),
-          const Spacer(),
-          if (!_controller.isSearching)
-            IconButton(
-              onPressed: () => _showAddDialog(context),
-              icon: const Icon(Icons.add, color: Colors.white),
-              style: IconButton.styleFrom(
-                backgroundColor: AppColors.cSlate900,
-                padding: const EdgeInsets.all(8),
-                minimumSize: const Size(32, 32),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecentSection(bool isDark) {
-    final recentSets = List<FlashcardSet>.from(_controller.sets)
-      ..sort((a, b) => b.lastAccessed.compareTo(a.lastAccessed));
-    final displayRecent = recentSets
-        .take(8)
-        .where((s) => s.lastAccessed != DateTime.fromMillisecondsSinceEpoch(0))
-        .toList();
-
-    if (displayRecent.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Text(
-            "recent".tr(),
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
-              letterSpacing: 1.0,
-            ),
-          ),
-        ),
-        SizedBox(
-          height: 120,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: displayRecent.length,
-            itemBuilder: (context, index) =>
-                _buildRecentCard(displayRecent[index], isDark),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRecentCard(FlashcardSet s, bool isDark) {
-    return Container(
-      width: 110,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      child: Material(
-        color: isDark ? AppColors.cDarkSurface : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => _navigateToDetail(s),
-          splashColor: AppColors.cBrand600.withValues(alpha: 0.1),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDark ? AppColors.cDarkBorder : AppColors.cSlate200,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.cBrand50,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    '¶',
-                    style: TextStyle(
-                      color: AppColors.cBrand600,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  s.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                    height: 1.2,
-                    color: isDark ? Colors.white : AppColors.cSlate900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
