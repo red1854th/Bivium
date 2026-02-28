@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/core/theme.dart';
 import 'package:bivium/services/google_drive_service.dart';
 import 'package:bivium/features/detail/remark_page.dart';
 import 'package:bivium/features/detail/edit_card_page.dart';
 import 'package:bivium/widgets/card_list_common.dart';
+import 'package:bivium/features/detail/widgets/items_tab_list_view.dart';
+import 'package:bivium/features/detail/widgets/items_tab_sheet_view.dart';
+
+enum ItemsTabMode { list, sheet }
 
 class ItemsTab extends StatefulWidget {
   final List<Flashcard> cards;
   final int currentPageIndex;
-  final Function(int) onCardSelected; // 탭 이동 시의 선택 동기화용
-  final Function(List<Flashcard>, int)? onCardsUpdated; // 데이터 변경 알림용
+  final Function(int) onCardSelected;
+  final Function(List<Flashcard>, int)? onCardsUpdated;
   final dynamic setInfo;
   final GoogleDriveService? driveService;
 
@@ -33,22 +36,24 @@ class ItemsTab extends StatefulWidget {
 class _ItemsTabState extends State<ItemsTab> {
   late FixedExtentScrollController _wheelController;
   final TextEditingController _searchController = TextEditingController();
-  bool _isSearchPinned = false;
+  bool _isSearchPinned = true;
   bool _isCompact = false;
+  ItemsTabMode _mode = ItemsTabMode.list;
 
   List<dynamic> _displayItems = [];
   double get _itemExtent => _isCompact ? 44.0 : 95.0;
   int _selectedDisplayIndex = 0;
   int _currentCardIndex = 0;
   int _exceptionIndex = 0;
+  String? _editingCellId; // "idx_field"
 
   @override
   void initState() {
     super.initState();
 
     final searchMgr = SearchManager();
-    _isSearchPinned = searchMgr.isPinned;
-    if (_isSearchPinned) {
+    _isSearchPinned = true;
+    if (searchMgr.query.isNotEmpty) {
       _searchController.text = searchMgr.query;
     }
 
@@ -178,20 +183,11 @@ class _ItemsTabState extends State<ItemsTab> {
   }
 
   void _onSearchChanged(String query) {
-    if (_isSearchPinned) {
-      SearchManager().update(query, true);
-    }
+    SearchManager().update(query, true);
     _updateDisplayItems();
     if (_wheelController.hasClients && _displayItems.isNotEmpty) {
       _wheelController.jumpToItem(0);
     }
-  }
-
-  void _onPinToggled() {
-    setState(() {
-      _isSearchPinned = !_isSearchPinned;
-      SearchManager().update(_searchController.text, _isSearchPinned);
-    });
   }
 
   @override
@@ -217,135 +213,45 @@ class _ItemsTabState extends State<ItemsTab> {
                 controller: _searchController,
                 onChanged: _onSearchChanged,
                 isDark: isDark,
-                isPinned: _isSearchPinned,
-                onPinToggled: _onPinToggled,
+                isPinned: true,
+                onPinToggled: () {},
+                showPin: false,
                 showCompactToggle: true,
+                additionalActions: [_buildModeToggle(isDark)],
               ),
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    if (_displayItems.isEmpty) {
-                      return Center(child: Text("no_search_results".tr()));
-                    }
-
-                    // 점프 및 드래그를 처리하는 공통 로직
-                    void handleScroll(double localY) {
-                      if (_wheelController.hasClients &&
-                          _wheelController.position.hasContentDimensions) {
-                        final double trackHeight = constraints.maxHeight - 8;
-                        final double adjustedY = (localY - 4).clamp(
-                          0.0,
-                          trackHeight,
-                        );
-                        final double scrollPercent = adjustedY / trackHeight;
-                        final double targetOffset =
-                            scrollPercent *
-                            _wheelController.position.maxScrollExtent;
-
-                        _wheelController.position.jumpTo(targetOffset);
-                      }
-                    }
-
-                    return Stack(
-                      children: [
-                        // 1. 리스트 뷰 및 순정 스크롤바
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: RawScrollbar(
-                            key: ValueKey(_isCompact),
-                            controller: _wheelController,
-                            minThumbLength: 40.0,
-                            mainAxisMargin: 4.0,
-                            thumbColor: AppColors.cBrand600.withValues(
-                              alpha: 0.8,
-                            ),
-                            thickness: 8,
-                            radius: const Radius.circular(10),
-                            thumbVisibility: true,
-                            interactive: true,
-                            pressDuration: Duration.zero,
-                            child: ListWheelScrollView.useDelegate(
-                              key: ValueKey(_isCompact),
-                              controller: _wheelController,
-                              itemExtent: _itemExtent,
-                              physics: const FixedExtentScrollPhysics(),
-                              diameterRatio: 1000,
-                              perspective: 0.000001,
-                              overAndUnderCenterOpacity: 1.0,
-                              onSelectedItemChanged: (index) {
-                                setState(() => _selectedDisplayIndex = index);
-                                HapticFeedback.selectionClick();
-
-                                // 현재 선택된 리스트 아이템이 Flashcard인 경우 원본 인덱스 추출하여 부모에 알림
-                                final item = _displayItems[index];
-                                if (item is Flashcard) {
-                                  final idx = widget.cards.indexOf(item);
-                                  _currentCardIndex = idx;
-                                  widget.onCardSelected(idx);
-                                }
-                              },
-                              childDelegate: ListWheelChildBuilderDelegate(
-                                childCount: _displayItems.length,
-                                builder: (context, index) {
-                                  final item = _displayItems[index];
-                                  if (item is Map &&
-                                      item['type'] == 'group_header') {
-                                    return _buildFolderHeader(
-                                      item['parent'],
-                                      index,
-                                      isDark,
-                                    );
-                                  }
-                                  final Flashcard card = item as Flashcard;
-                                  return _buildCardItem(
-                                    card,
-                                    widget.cards.indexOf(card),
-                                    index,
-                                    isDark,
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // 2. 통합 터치 레이어 (Jump + Drag 유지)
-                        Positioned(
-                          top: 0,
-                          bottom: 0,
-                          right: 0,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            // 터치 즉시 점프
-                            onTapDown: (details) {
-                              handleScroll(details.localPosition.dy);
-                              HapticFeedback.lightImpact();
-                            },
-                            // 점프 후 손가락을 떼지 않고 움직일 때 (드래그) 처리
-                            onVerticalDragUpdate: (details) {
-                              handleScroll(details.localPosition.dy);
-                            },
-                            child: Container(
-                              width: 30, // 터치 인식 범위
-                              alignment: Alignment.centerRight,
-                              color: Colors.transparent,
-                              child: Container(
-                                width: 6,
-                                margin: const EdgeInsets.only(right: 7),
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? Colors.white10
-                                      : Colors.black12,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+                child: _mode == ItemsTabMode.sheet
+                    ? ItemsTabSheetView(
+                        displayItems: _displayItems,
+                        allCards: widget.cards,
+                        isDark: isDark,
+                        editingCellId: _editingCellId,
+                        onUpdateCell: _updateCell,
+                        onStartEditing: (id) =>
+                            setState(() => _editingCellId = id),
+                        onRefresh: () => setState(() {}),
+                      )
+                    : ItemsTabListView(
+                        displayItems: _displayItems,
+                        allCards: widget.cards,
+                        scrollController: _wheelController,
+                        selectedDisplayIndex: _selectedDisplayIndex,
+                        isCompact: _isCompact,
+                        isDark: isDark,
+                        itemExtent: _itemExtent,
+                        onSelectedItemChanged: (index) {
+                          setState(() => _selectedDisplayIndex = index);
+                          HapticFeedback.selectionClick();
+                          final item = _displayItems[index];
+                          if (item is Flashcard) {
+                            final idx = widget.cards.indexOf(item);
+                            _currentCardIndex = idx;
+                            widget.onCardSelected(idx);
+                          }
+                        },
+                        buildCardItem: _buildCardItem,
+                        buildFolderHeader: _buildFolderHeader,
+                      ),
               ),
               const SizedBox(height: 16),
             ],
@@ -630,6 +536,98 @@ class _ItemsTabState extends State<ItemsTab> {
           setState(() => _selectedDisplayIndex = displayIdx);
         }
       });
+    }
+  }
+
+  Widget _buildModeToggle(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.black.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildModeButton(ItemsTabMode.list, Icons.view_list_rounded, isDark),
+          _buildModeButton(ItemsTabMode.sheet, Icons.grid_on_rounded, isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeButton(ItemsTabMode mode, IconData icon, bool isDark) {
+    bool isSelected = _mode == mode;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _mode = mode;
+        });
+        HapticFeedback.mediumImpact();
+      },
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDark
+                    ? AppColors.cBrand600.withValues(alpha: 0.15)
+                    : AppColors.cBrand600.withValues(alpha: 0.1))
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: isSelected
+              ? Border.all(color: AppColors.cBrand600, width: 1.5)
+              : null,
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: isSelected
+              ? AppColors.cBrand600
+              : (isDark ? Colors.white38 : Colors.black38),
+        ),
+      ),
+    );
+  }
+
+  void _updateCell(
+    Flashcard card,
+    int originalIdx,
+    String field,
+    String newValue,
+  ) async {
+    if (field == 'front' && card.front == newValue) return;
+    if (field == 'back' && card.back == newValue) return;
+    if (field == 'remark' && card.remark == newValue) return;
+    if (field == 'key' && card.key == newValue) return;
+
+    setState(() {
+      if (field == 'front') {
+        card.front = newValue;
+      } else if (field == 'back') {
+        card.back = newValue;
+      } else if (field == 'remark') {
+        card.remark = newValue;
+      } else if (field == 'key') {
+        card.key = newValue;
+      }
+    });
+
+    if (widget.driveService != null) {
+      try {
+        await widget.driveService!.updateFlashcard(
+          spreadsheetId: widget.setInfo.sheetId,
+          cardIndex: originalIdx,
+          setInfo: widget.setInfo,
+          card: card,
+        );
+        widget.onCardsUpdated?.call(widget.cards, originalIdx);
+      } catch (e) {
+        debugPrint('셀 업데이트 실패: $e');
+      }
     }
   }
 }

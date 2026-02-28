@@ -451,6 +451,23 @@ class GoogleDriveService {
     );
   }
 
+  Future<void> updateSingleCell({
+    required String spreadsheetId,
+    required int gid,
+    required int rowIndex,
+    required int colIndex,
+    required String value,
+  }) async {
+    final client = await _getAuthenticatedClient();
+    if (client == null) return;
+
+    final sheetsApi = sheets.SheetsApi(client);
+    final batchRequest = sheets.BatchUpdateSpreadsheetRequest(
+      requests: [_buildCellReq(gid, rowIndex, colIndex, value, null)],
+    );
+    await sheetsApi.spreadsheets.batchUpdate(batchRequest, spreadsheetId);
+  }
+
   Future<void> updateFlashcard({
     required String spreadsheetId,
     required int cardIndex,
@@ -465,23 +482,49 @@ class GoogleDriveService {
         ? sheets.Color(red: 1.0, green: 0.98, blue: 0.77)
         : sheets.Color(red: 1.0, green: 1.0, blue: 1.0);
 
-    final batchRequest = sheets.BatchUpdateSpreadsheetRequest(
-      requests: [
+    final List<sheets.Request> requests = [
+      _buildCellReq(
+        setInfo.gid,
+        cardIndex,
+        setInfo.frontColIdx,
+        card.front,
+        color,
+      ),
+      _buildCellReq(
+        setInfo.gid,
+        cardIndex,
+        setInfo.backColIdx,
+        card.back,
+        null,
+      ),
+    ];
+
+    if (setInfo.remarkColIdx != -1) {
+      requests.add(
         _buildCellReq(
           setInfo.gid,
           cardIndex,
-          setInfo.frontColIdx,
-          card.front,
-          color,
-        ),
-        _buildCellReq(
-          setInfo.gid,
-          cardIndex,
-          setInfo.backColIdx,
-          card.back,
+          setInfo.remarkColIdx,
+          card.remark,
           null,
         ),
-      ],
+      );
+    }
+
+    if (setInfo.keyColIdx != -1) {
+      requests.add(
+        _buildCellReq(
+          setInfo.gid,
+          cardIndex,
+          setInfo.keyColIdx,
+          card.key,
+          null,
+        ),
+      );
+    }
+
+    final batchRequest = sheets.BatchUpdateSpreadsheetRequest(
+      requests: requests,
     );
     await sheetsApi.spreadsheets.batchUpdate(batchRequest, spreadsheetId);
   }

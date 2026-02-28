@@ -106,13 +106,16 @@ class ManuscriptLinePainter extends CustomPainter {
         for (int i = 0; i < leftCount; i++) {
           final double px = paddingLeft + (i * cellSize);
           if (px + cellSize <= size.width - paddingRight) {
-            _drawSinglePattern(
-              canvas,
-              random,
-              Offset(px, py),
-              cellSize,
-              patternPaint,
-            );
+            // 1/4 확률(25%)로 패턴을 숨김 (0, 1, 2, 3 중 0일 때 skip)
+            if (random.nextInt(5) != 0) {
+              _drawSinglePattern(
+                canvas,
+                random,
+                Offset(px, py),
+                cellSize,
+                patternPaint,
+              );
+            }
           }
         }
 
@@ -121,13 +124,16 @@ class ManuscriptLinePainter extends CustomPainter {
         for (int i = 0; i < rightCount; i++) {
           final double px = size.width - paddingRight - ((i + 1) * cellSize);
           if (px >= paddingLeft) {
-            _drawSinglePattern(
-              canvas,
-              random,
-              Offset(px, py),
-              cellSize,
-              patternPaint,
-            );
+            // 1/4 확률(25%)로 패턴을 숨김
+            if (random.nextInt(5) != 0) {
+              _drawSinglePattern(
+                canvas,
+                random,
+                Offset(px, py),
+                cellSize,
+                patternPaint,
+              );
+            }
           }
         }
       }

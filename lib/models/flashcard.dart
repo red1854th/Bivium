@@ -1,5 +1,5 @@
 class Flashcard {
-  final String key;
+  String key;
   final int groupDepth; // 구글 시트에서 가져온 그룹 깊이 (UI 들여쓰기용)
   bool isCollapsed; // 현재 행의 접힘 상태
   String front;

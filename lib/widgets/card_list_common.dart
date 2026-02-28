@@ -783,7 +783,9 @@ class CardSearchField extends StatefulWidget {
   final bool isDark;
   final bool isPinned;
   final VoidCallback onPinToggled;
+  final bool showPin;
   final bool showCompactToggle;
+  final List<Widget>? additionalActions;
 
   const CardSearchField({
     super.key,
@@ -792,7 +794,9 @@ class CardSearchField extends StatefulWidget {
     required this.isDark,
     required this.isPinned,
     required this.onPinToggled,
+    this.showPin = true,
     this.showCompactToggle = false,
+    this.additionalActions,
   });
 
   @override
@@ -857,35 +861,36 @@ class _CardSearchFieldState extends State<CardSearchField> {
             ),
           ),
           const SizedBox(width: 8),
-          Material(
-            color: widget.isPinned
-                ? AppColors.cBrand600.withValues(alpha: 0.15)
-                : (widget.isDark ? AppColors.cSlate800 : AppColors.cSlate100),
-            borderRadius: BorderRadius.circular(12),
-            child: InkWell(
-              onTap: widget.onPinToggled,
+          if (widget.showPin)
+            Material(
+              color: widget.isPinned
+                  ? AppColors.cBrand600.withValues(alpha: 0.15)
+                  : (widget.isDark ? AppColors.cSlate800 : AppColors.cSlate100),
               borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: widget.isPinned
-                      ? Border.all(color: AppColors.cBrand600, width: 1.5)
-                      : null,
-                ),
-                child: Icon(
-                  widget.isPinned
-                      ? Icons.push_pin_rounded
-                      : Icons.push_pin_outlined,
-                  size: 20,
-                  color: widget.isPinned
-                      ? AppColors.cBrand600
-                      : (widget.isDark ? Colors.white38 : Colors.black38),
+              child: InkWell(
+                onTap: widget.onPinToggled,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: widget.isPinned
+                        ? Border.all(color: AppColors.cBrand600, width: 1.5)
+                        : null,
+                  ),
+                  child: Icon(
+                    widget.isPinned
+                        ? Icons.push_pin_rounded
+                        : Icons.push_pin_outlined,
+                    size: 20,
+                    color: widget.isPinned
+                        ? AppColors.cBrand600
+                        : (widget.isDark ? Colors.white38 : Colors.black38),
+                  ),
                 ),
               ),
             ),
-          ),
           if (widget.showCompactToggle) ...[
             const SizedBox(width: 8),
             Material(
@@ -918,6 +923,7 @@ class _CardSearchFieldState extends State<CardSearchField> {
               ),
             ),
           ],
+          if (widget.additionalActions != null) ...widget.additionalActions!,
         ],
       ),
     );
