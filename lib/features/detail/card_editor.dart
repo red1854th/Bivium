@@ -16,6 +16,7 @@ class CardEditor extends StatefulWidget {
   final EditorSettings settings;
   final VoidCallback onLayoutToggle;
   final VoidCallback onSettingsToggle;
+  final VoidCallback? onToolbarCustomize;
   final VoidCallback? onSetUpdated;
   final void Function({
     ZebraHighlightController? controller,
@@ -34,6 +35,7 @@ class CardEditor extends StatefulWidget {
     required this.settings,
     required this.onLayoutToggle,
     required this.onSettingsToggle,
+    this.onToolbarCustomize,
     this.onSetUpdated,
     this.onFocusChanged,
   });

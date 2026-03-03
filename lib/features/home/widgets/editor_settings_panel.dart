@@ -20,6 +20,7 @@ class EditorSettingsPanel extends StatefulWidget {
   final bool isVisible;
   final EditorSettings currentSettings;
   final Function(EditorSettings) onSettingsChanged;
+  final VoidCallback onToolbarCustomize;
   final VoidCallback onClose;
   final Flashcard card;
   final int cardIndex;
@@ -29,6 +30,7 @@ class EditorSettingsPanel extends StatefulWidget {
     required this.isVisible,
     required this.currentSettings,
     required this.onSettingsChanged,
+    required this.onToolbarCustomize,
     required this.onClose,
     required this.card,
     required this.cardIndex,
@@ -141,6 +143,16 @@ class _EditorSettingsPanelState extends State<EditorSettingsPanel> {
                         icon: Icons.font_download_outlined,
                         value: _fontFamily,
                         onTap: () => _showFontPicker(context),
+                        isDark: isDark,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildMenuTile(
+                        icon: Icons.tune_rounded,
+                        value: "툴바 설정",
+                        onTap: () {
+                          widget.onClose();
+                          widget.onToolbarCustomize();
+                        },
                         isDark: isDark,
                       ),
                       const SizedBox(height: 12),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/services/google_drive_service.dart';
@@ -10,6 +11,8 @@ import 'card_editor.dart';
 import 'package:bivium/widgets/card_jump_dialog.dart';
 import 'package:bivium/features/home/widgets/editor_settings_panel.dart';
 import 'package:bivium/features/editor/text_editor.dart';
+import 'package:bivium/models/toolbar_item.dart';
+import 'package:bivium/features/detail/toolbar_customize_page.dart';
 
 class EditCardPage extends StatefulWidget {
   final List<Flashcard> cards;
@@ -47,6 +50,19 @@ class _EditCardPageState extends State<EditCardPage> {
   UndoHistoryController? _activeUndoController;
   bool _isFrontActive = true;
 
+  // 커스텀 툴바 아이템
+  List<ToolbarItem> _toolbarItems = [
+    ToolbarItem(type: ToolbarItemType.undo),
+    ToolbarItem(type: ToolbarItemType.redo),
+    ToolbarItem(type: ToolbarItemType.insertCheckbox),
+    ToolbarItem(type: ToolbarItemType.moveLeft),
+    ToolbarItem(type: ToolbarItemType.moveRight),
+    ToolbarItem(type: ToolbarItemType.hideKeyboard),
+  ];
+  // 툴바 스와이프 페이지 컨트롤러
+  late PageController _toolbarPageController;
+  static const int _toolbarPageSize = 10; // 버튼 넉넉히 들어가게 수정
+
   @override
   void initState() {
     super.initState();
@@ -55,12 +71,33 @@ class _EditCardPageState extends State<EditCardPage> {
       widget.cards.length - 1,
     );
     _pageController = PageController(initialPage: _currentPageIndex);
+    _toolbarPageController = PageController();
     _loadPreferences();
   }
 
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
+    // 저장된 툴바 설정 불러오기
+    List<ToolbarItem> loadedItems = [];
+    final savedJson = prefs.getString('toolbar_items');
+    if (savedJson != null) {
+      try {
+        final List decoded = jsonDecode(savedJson);
+        loadedItems = decoded
+            .map((e) => ToolbarItem.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+        // 새로 추가된 타입이 있으면 끝에 붙이기
+        final existingTypes = loadedItems.map((e) => e.type).toSet();
+        for (final type in ToolbarItemType.values) {
+          if (!existingTypes.contains(type)) {
+            loadedItems.add(ToolbarItem(type: type));
+          }
+        }
+      } catch (_) {
+        loadedItems = [];
+      }
+    }
     setState(() {
       _isVertical = prefs.getBool('is_editor_vertical') ?? true;
       _settings = EditorSettings(
@@ -68,12 +105,16 @@ class _EditCardPageState extends State<EditCardPage> {
         lineHeight: prefs.getDouble('editor_line_height') ?? 1.4,
         fontFamily: prefs.getString('editor_font_family') ?? 'Pretendard',
       );
+      if (loadedItems.isNotEmpty) {
+        _toolbarItems = loadedItems;
+      }
     });
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    _toolbarPageController.dispose();
     super.dispose();
   }
 
@@ -105,6 +146,22 @@ class _EditCardPageState extends State<EditCardPage> {
     setState(() => _isVertical = !_isVertical);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_editor_vertical', _isVertical);
+  }
+
+  void _openToolbarCustomize() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ToolbarCustomizePage(
+          items: _toolbarItems,
+          onSave: (items) async {
+            setState(() => _toolbarItems = items);
+            final prefs = await SharedPreferences.getInstance();
+            final encoded = jsonEncode(items.map((e) => e.toJson()).toList());
+            await prefs.setString('toolbar_items', encoded);
+          },
+        ),
+      ),
+    );
   }
 
   void _showCardJumpDialog() async {
@@ -257,6 +314,7 @@ class _EditCardPageState extends State<EditCardPage> {
                                 onSettingsToggle: () => setState(
                                   () => _isEditorSettingsOpen = true,
                                 ),
+                                onToolbarCustomize: _openToolbarCustomize,
                                 onFocusChanged:
                                     ({
                                       controller,
@@ -293,6 +351,7 @@ class _EditCardPageState extends State<EditCardPage> {
                       card: widget.cards[_currentPageIndex],
                       cardIndex: _currentPageIndex,
                       onSettingsChanged: (s) => setState(() => _settings = s),
+                      onToolbarCustomize: _openToolbarCustomize, // 콜백 전달
                       onClose: () =>
                           setState(() => _isEditorSettingsOpen = false),
                     ),
@@ -307,7 +366,52 @@ class _EditCardPageState extends State<EditCardPage> {
     );
   }
 
+  // 각 ToolbarItem 타입에 맞는 아이콘/색상/액션 반환
+  Widget _buildToolbarButton(ToolbarItem item, bool isDark) {
+    Color color;
+    VoidCallback? onTap;
+    switch (item.type) {
+      case ToolbarItemType.undo:
+        final canUndo = _activeUndoController?.value.canUndo == true;
+        color = canUndo
+            ? AppColors.cBrand600
+            : Colors.grey.withValues(alpha: 0.5);
+        onTap = canUndo ? _handleUndo : null;
+        break;
+      case ToolbarItemType.redo:
+        final canRedo = _activeUndoController?.value.canRedo == true;
+        color = canRedo
+            ? AppColors.cBrand600
+            : Colors.grey.withValues(alpha: 0.5);
+        onTap = canRedo ? () => _activeUndoController?.redo() : null;
+        break;
+      case ToolbarItemType.insertCheckbox:
+        color = AppColors.cBrand600;
+        onTap = () => _insertTag('[ ]');
+        break;
+      case ToolbarItemType.moveLeft:
+        color = AppColors.cBrand600;
+        onTap = () => _moveCursor(-1);
+        break;
+      case ToolbarItemType.moveRight:
+        color = AppColors.cBrand600;
+        onTap = () => _moveCursor(1);
+        break;
+      case ToolbarItemType.hideKeyboard:
+        color = AppColors.cBrand600;
+        onTap = () => FocusScope.of(context).unfocus();
+        break;
+    }
+    return _toolbarAction(icon: item.icon, color: color, onTap: onTap);
+  }
+
   Widget _buildFixedBottomToolbar(bool isDark) {
+    final visibleItems = _toolbarItems.where((e) => e.isVisible).toList();
+    final totalPages = (visibleItems.length / _toolbarPageSize).ceil().clamp(
+      1,
+      99,
+    );
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onHorizontalDragStart: (_) {},
@@ -324,51 +428,33 @@ class _EditCardPageState extends State<EditCardPage> {
               ),
             ),
           ),
-          child: Row(
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              _toolbarAction(
-                icon: Icons.undo_rounded,
-                color: _activeUndoController?.value.canUndo == true
-                    ? AppColors.cBrand600
-                    : Colors.grey.withValues(alpha: 0.5),
-                onTap: _activeUndoController?.value.canUndo == true
-                    ? () => _handleUndo()
-                    : null,
+              PageView.builder(
+                controller: _toolbarPageController,
+                physics: const BouncingScrollPhysics(),
+                itemCount: totalPages,
+                itemBuilder: (context, pageIndex) {
+                  final start = pageIndex * _toolbarPageSize;
+                  final end = (start + _toolbarPageSize).clamp(
+                    0,
+                    visibleItems.length,
+                  );
+                  final pageItems = visibleItems.sublist(start, end);
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      ...pageItems.map(
+                        (item) => _buildToolbarButton(item, isDark),
+                      ),
+                      const Spacer(),
+                      // if (totalPages > 1) SizedBox(width: 48), // 페이지 인디케이터 공간
+                    ],
+                  );
+                },
               ),
-              _toolbarAction(
-                icon: Icons.redo_rounded,
-                color: _activeUndoController?.value.canRedo == true
-                    ? AppColors.cBrand600
-                    : Colors.grey.withValues(alpha: 0.5),
-                onTap: _activeUndoController?.value.canRedo == true
-                    ? () => _activeUndoController?.redo()
-                    : null,
-              ),
-              const VerticalDivider(width: 20, indent: 12, endIndent: 12),
-              _toolbarAction(
-                icon: Icons.add_box_outlined,
-                color: AppColors.cBrand600,
-                onTap: () => _insertTag("[ ]"),
-              ),
-
-              const Spacer(),
-
-              _toolbarAction(
-                icon: Icons.arrow_back_ios_new_rounded,
-                color: AppColors.cBrand600,
-                onTap: () => _moveCursor(-1),
-              ),
-              _toolbarAction(
-                icon: Icons.arrow_forward_ios_rounded,
-                color: AppColors.cBrand600,
-                onTap: () => _moveCursor(1),
-              ),
-              const VerticalDivider(width: 20, indent: 12, endIndent: 12),
-              _toolbarAction(
-                icon: Icons.keyboard_hide_rounded,
-                color: AppColors.cBrand600,
-                onTap: () => FocusScope.of(context).unfocus(),
-              ),
+              // 스와이프 페이지 인디케이터 제거 (걸리적거린다는 요청 반영)
             ],
           ),
         ),
