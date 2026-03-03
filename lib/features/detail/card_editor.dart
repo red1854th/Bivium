@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/services/google_drive_service.dart';
 import 'package:bivium/features/detail/remark_page.dart';
+import 'package:bivium/features/detail/remark_setting_page.dart';
 import 'package:bivium/core/theme.dart';
 import 'package:bivium/features/editor/text_editor.dart';
 import 'package:bivium/features/home/widgets/editor_settings_panel.dart';
@@ -14,6 +15,7 @@ class CardEditor extends StatefulWidget {
   final FlashcardSet setInfo;
   final GoogleDriveService driveService;
   final Function(bool) onSettingsToggle;
+  final VoidCallback? onSetUpdated;
 
   const CardEditor({
     super.key,
@@ -22,6 +24,7 @@ class CardEditor extends StatefulWidget {
     required this.setInfo,
     required this.driveService,
     required this.onSettingsToggle,
+    this.onSetUpdated,
   });
 
   @override
@@ -210,7 +213,7 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
                         ],
                       ),
                     ),
-                    _buildBottomToolbar(context),
+                    _buildBottomToolbar(),
                   ],
                 ),
               ),
@@ -242,7 +245,7 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildBottomToolbar(BuildContext context) {
+  Widget _buildBottomToolbar() {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       height: 40,
@@ -263,6 +266,26 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
                 ? AppColors.cBrand600
                 : Colors.grey,
             onTap: () async {
+              if (widget.setInfo.remarkColIdx == -1) {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => RemarkSettingPage(
+                      service: widget.driveService,
+                      spreadsheetId: widget.setInfo.sheetId,
+                      onConfirm: (idx) {
+                        setState(() {
+                          widget.setInfo.remarkColIdx = idx;
+                        });
+                        widget.onSetUpdated?.call();
+                      },
+                    ),
+                  ),
+                );
+                if (!mounted) return;
+                if (widget.setInfo.remarkColIdx == -1) return;
+              }
+
               final res = await Navigator.push<String>(
                 context,
                 MaterialPageRoute(
@@ -278,6 +301,7 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
                   ),
                 ),
               );
+              if (!mounted) return;
               if (res != null) {
                 setState(() => widget.card.remark = res);
               }

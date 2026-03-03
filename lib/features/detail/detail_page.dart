@@ -479,6 +479,10 @@ class _DetailPageState extends State<DetailPage> {
                             _currentCardPageIndex = lastIndex;
                           });
                         },
+                        onSetUpdated: () {
+                          widget.onUpdate();
+                          _fetchInitialData();
+                        },
                         setInfo: widget.setInfo,
                         driveService: widget.driveService,
                       ),

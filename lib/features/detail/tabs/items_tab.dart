@@ -7,15 +7,16 @@ import 'package:bivium/features/detail/remark_page.dart';
 import 'package:bivium/features/detail/edit_card_page.dart';
 import 'package:bivium/widgets/card_list_common.dart';
 import 'package:bivium/features/detail/widgets/items_tab_list_view.dart';
-import 'package:bivium/features/detail/widgets/items_tab_sheet_view.dart';
+import 'package:bivium/features/detail/remark_setting_page.dart';
 
-enum ItemsTabMode { list, sheet }
+// ItemsTabMode enum removed
 
 class ItemsTab extends StatefulWidget {
   final List<Flashcard> cards;
   final int currentPageIndex;
   final Function(int) onCardSelected;
   final Function(List<Flashcard>, int)? onCardsUpdated;
+  final VoidCallback? onSetUpdated;
   final dynamic setInfo;
   final GoogleDriveService? driveService;
 
@@ -27,6 +28,7 @@ class ItemsTab extends StatefulWidget {
     required this.currentPageIndex,
     required this.onCardSelected,
     this.onCardsUpdated,
+    this.onSetUpdated,
   });
 
   @override
@@ -38,7 +40,7 @@ class _ItemsTabState extends State<ItemsTab> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchPinned = true;
   bool _isCompact = false;
-  ItemsTabMode _mode = ItemsTabMode.list;
+  // ItemsTabMode _mode removed
 
   List<dynamic> _displayItems = [];
   double get _itemExtent => _isCompact ? 44.0 : 95.0;
@@ -217,41 +219,32 @@ class _ItemsTabState extends State<ItemsTab> {
                 onPinToggled: () {},
                 showPin: false,
                 showCompactToggle: true,
-                additionalActions: [_buildModeToggle(isDark)],
               ),
               Expanded(
-                child: _mode == ItemsTabMode.sheet
-                    ? ItemsTabSheetView(
-                        displayItems: _displayItems,
-                        allCards: widget.cards,
-                        isDark: isDark,
-                        editingCellId: _editingCellId,
-                        onUpdateCell: _updateCell,
-                        onStartEditing: (id) =>
-                            setState(() => _editingCellId = id),
-                        onRefresh: () => setState(() {}),
-                      )
-                    : ItemsTabListView(
-                        displayItems: _displayItems,
-                        allCards: widget.cards,
-                        scrollController: _wheelController,
-                        selectedDisplayIndex: _selectedDisplayIndex,
-                        isCompact: _isCompact,
-                        isDark: isDark,
-                        itemExtent: _itemExtent,
-                        onSelectedItemChanged: (index) {
-                          setState(() => _selectedDisplayIndex = index);
-                          HapticFeedback.selectionClick();
-                          final item = _displayItems[index];
-                          if (item is Flashcard) {
-                            final idx = widget.cards.indexOf(item);
-                            _currentCardIndex = idx;
-                            widget.onCardSelected(idx);
-                          }
-                        },
-                        buildCardItem: _buildCardItem,
-                        buildFolderHeader: _buildFolderHeader,
-                      ),
+                child: ItemsTabListView(
+                  displayItems: _displayItems,
+                  allCards: widget.cards,
+                  scrollController: _wheelController,
+                  selectedDisplayIndex: _selectedDisplayIndex,
+                  isCompact: _isCompact,
+                  isDark: isDark,
+                  itemExtent: _itemExtent,
+                  editingCellId: _editingCellId,
+                  onStartEditing: (id) => setState(() => _editingCellId = id),
+                  onUpdateCell: _updateCell,
+                  onSelectedItemChanged: (index) {
+                    setState(() => _selectedDisplayIndex = index);
+                    HapticFeedback.selectionClick();
+                    final item = _displayItems[index];
+                    if (item is Flashcard) {
+                      final idx = widget.cards.indexOf(item);
+                      _currentCardIndex = idx;
+                      widget.onCardSelected(idx);
+                    }
+                  },
+                  buildCardItem: _buildCardItem,
+                  buildFolderHeader: _buildFolderHeader,
+                ),
               ),
               const SizedBox(height: 16),
             ],
@@ -261,7 +254,14 @@ class _ItemsTabState extends State<ItemsTab> {
     );
   }
 
-  Widget _buildFolderHeader(Flashcard parent, int index, bool isDark) {
+  Widget _buildFolderHeader(
+    Flashcard parent,
+    int index,
+    bool isDark,
+    String? editingCellId,
+    Function(String?) onStartEditing,
+    Function(Flashcard, int, String, String) onUpdateCell,
+  ) {
     final int originalIdx = widget.cards.indexOf(parent);
     final Color idleBtnColor = isDark
         ? Colors.white.withValues(alpha: 0.05)
@@ -274,6 +274,7 @@ class _ItemsTabState extends State<ItemsTab> {
       isSelected: _selectedDisplayIndex == index,
       isDark: isDark,
       isSimple: CompactModeManager().isSimple(widget.setInfo.keyColIdx),
+      editingCellId: editingCellId,
       onTap: () => _goToEditPage(originalIdx), // 바디 클릭: 편집기로 이동
       actions: [
         // Remark 버튼
@@ -284,6 +285,26 @@ class _ItemsTabState extends State<ItemsTab> {
           borderRadius: BorderRadius.circular(4),
           child: InkWell(
             onTap: () async {
+              if (widget.setInfo.remarkColIdx == -1) {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => RemarkSettingPage(
+                      service: widget.driveService!,
+                      spreadsheetId: widget.setInfo.sheetId,
+                      onConfirm: (idx) {
+                        setState(() {
+                          widget.setInfo.remarkColIdx = idx;
+                        });
+                        widget.onSetUpdated?.call();
+                      },
+                    ),
+                  ),
+                );
+                if (widget.setInfo.remarkColIdx == -1) return;
+              }
+              if (!mounted) return;
+
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -387,6 +408,8 @@ class _ItemsTabState extends State<ItemsTab> {
           }
         }
       },
+      onStartEditing: onStartEditing,
+      onUpdateCell: onUpdateCell,
     );
   }
 
@@ -395,6 +418,9 @@ class _ItemsTabState extends State<ItemsTab> {
     int originalIndex,
     int index,
     bool isDark,
+    String? editingCellId,
+    Function(String?) onStartEditing,
+    Function(Flashcard, int, String, String) onUpdateCell,
   ) {
     final Color idleBtnColor = isDark
         ? Colors.white.withValues(alpha: 0.05)
@@ -408,6 +434,9 @@ class _ItemsTabState extends State<ItemsTab> {
       isDark: isDark,
       isParent: _checkHasChildren(originalIndex),
       isSimple: CompactModeManager().isSimple(widget.setInfo.keyColIdx),
+      editingCellId: editingCellId,
+      onStartEditing: onStartEditing,
+      onUpdateCell: onUpdateCell,
       onTap: () => _goToEditPage(originalIndex),
       actions: [
         // Remark 버튼
@@ -418,6 +447,26 @@ class _ItemsTabState extends State<ItemsTab> {
           borderRadius: BorderRadius.circular(4),
           child: InkWell(
             onTap: () async {
+              if (widget.setInfo.remarkColIdx == -1) {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => RemarkSettingPage(
+                      service: widget.driveService!,
+                      spreadsheetId: widget.setInfo.sheetId,
+                      onConfirm: (idx) {
+                        setState(() {
+                          widget.setInfo.remarkColIdx = idx;
+                        });
+                        widget.onSetUpdated?.call();
+                      },
+                    ),
+                  ),
+                );
+                if (widget.setInfo.remarkColIdx == -1) return;
+              }
+              if (!mounted) return;
+
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -508,6 +557,7 @@ class _ItemsTabState extends State<ItemsTab> {
           initialCardIndex: index,
           setInfo: widget.setInfo,
           driveService: widget.driveService!,
+          onSetUpdated: widget.onSetUpdated,
         ),
       ),
     );
@@ -539,59 +589,7 @@ class _ItemsTabState extends State<ItemsTab> {
     }
   }
 
-  Widget _buildModeToggle(bool isDark) {
-    return Container(
-      margin: const EdgeInsets.only(left: 8),
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withValues(alpha: 0.05)
-            : Colors.black.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildModeButton(ItemsTabMode.list, Icons.view_list_rounded, isDark),
-          _buildModeButton(ItemsTabMode.sheet, Icons.grid_on_rounded, isDark),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModeButton(ItemsTabMode mode, IconData icon, bool isDark) {
-    bool isSelected = _mode == mode;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _mode = mode;
-        });
-        HapticFeedback.mediumImpact();
-      },
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isDark
-                    ? AppColors.cBrand600.withValues(alpha: 0.15)
-                    : AppColors.cBrand600.withValues(alpha: 0.1))
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          border: isSelected
-              ? Border.all(color: AppColors.cBrand600, width: 1.5)
-              : null,
-        ),
-        child: Icon(
-          icon,
-          size: 20,
-          color: isSelected
-              ? AppColors.cBrand600
-              : (isDark ? Colors.white38 : Colors.black38),
-        ),
-      ),
-    );
-  }
+  // Unused methods removed
 
   void _updateCell(
     Flashcard card,

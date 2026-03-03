@@ -177,6 +177,9 @@ class FlashcardFolderHeader extends StatelessWidget {
   final double opacity;
   final VoidCallback? onLongPress;
   final bool isSimple;
+  final String? editingCellId;
+  final Function(String?) onStartEditing;
+  final Function(Flashcard, int, String, String) onUpdateCell;
 
   const FlashcardFolderHeader({
     super.key,
@@ -192,6 +195,9 @@ class FlashcardFolderHeader extends StatelessWidget {
     this.opacity = 1.0,
     this.onLongPress,
     this.isSimple = false,
+    this.editingCellId,
+    required this.onStartEditing,
+    required this.onUpdateCell,
   });
 
   @override
@@ -416,60 +422,94 @@ class FlashcardFolderHeader extends StatelessWidget {
   }
 
   Widget _buildSimpleLayout(bool hasActions) {
+    final Color borderColor = isDark ? Colors.white10 : Colors.black12;
+
     return Row(
       children: [
         _buildIndexBadge(),
         const SizedBox(width: 8),
         Expanded(
-          child: Text(
-            parent.front.replaceAll('\n', ' '),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white : AppColors.cSlate900,
+          flex: 4,
+          child: Container(
+            height: double.infinity,
+            decoration: BoxDecoration(
+              border: Border(left: BorderSide(color: borderColor)),
             ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: Text(
-            '|',
-            style: TextStyle(
-              color: isDark ? AppColors.cSlate600 : AppColors.cSlate300,
-              fontSize: 12,
+            child: CompactEditableCell(
+              text: parent.front,
+              isEditing: editingCellId == '${originalIndex}_parent_front',
+              onStartEditing: () =>
+                  onStartEditing('${originalIndex}_parent_front'),
+              onUpdate: (val) {
+                onUpdateCell(parent, originalIndex, 'front', val);
+                onStartEditing(null);
+              },
+              isDark: isDark,
+              textAlign: TextAlign.center,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : AppColors.cSlate900,
+              ),
             ),
           ),
         ),
         Expanded(
-          child: Text(
-            parent.back.replaceAll('\n', ' '),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
-              fontWeight: FontWeight.w500,
+          flex: 4,
+          child: Container(
+            height: double.infinity,
+            decoration: BoxDecoration(
+              border: Border(left: BorderSide(color: borderColor)),
+            ),
+            child: CompactEditableCell(
+              text: parent.back,
+              isEditing: editingCellId == '${originalIndex}_parent_back',
+              onStartEditing: () =>
+                  onStartEditing('${originalIndex}_parent_back'),
+              onUpdate: (val) {
+                onUpdateCell(parent, originalIndex, 'back', val);
+                onStartEditing(null);
+              },
+              isDark: isDark,
+              textAlign: TextAlign.center,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ),
-        if (!hasActions) ...[
-          if (parent.remark.isNotEmpty)
-            const Padding(
-              padding: EdgeInsets.only(left: 4),
-              child: Icon(
-                Icons.history_edu_rounded,
-                size: 14,
-                color: AppColors.cBrand600,
-              ),
-            ),
-          if (parent.isFlagged)
-            const Padding(
-              padding: EdgeInsets.only(left: 4),
-              child: Icon(Icons.flag_rounded, size: 14, color: Colors.orange),
-            ),
-        ],
+        Container(
+          width: 36,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: borderColor)),
+          ),
+          child: Center(
+            child: !hasActions
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (parent.remark.isNotEmpty)
+                        const Icon(
+                          Icons.history_edu_rounded,
+                          size: 14,
+                          color: AppColors.cBrand600,
+                        ),
+                      if (parent.isFlagged)
+                        const Icon(
+                          Icons.flag_rounded,
+                          size: 14,
+                          color: Colors.orange,
+                        ),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ),
       ],
     );
   }
@@ -489,6 +529,9 @@ class FlashcardListItem extends StatelessWidget {
   final bool isParent;
   final VoidCallback? onLongPress;
   final bool isSimple;
+  final String? editingCellId;
+  final Function(String?) onStartEditing;
+  final Function(Flashcard, int, String, String) onUpdateCell;
 
   const FlashcardListItem({
     super.key,
@@ -504,6 +547,9 @@ class FlashcardListItem extends StatelessWidget {
     required this.isParent,
     this.onLongPress,
     this.isSimple = false,
+    this.editingCellId,
+    required this.onStartEditing,
+    required this.onUpdateCell,
   });
 
   @override
@@ -717,60 +763,92 @@ class FlashcardListItem extends StatelessWidget {
   }
 
   Widget _buildSimpleLayout(bool hasActions) {
+    final Color borderColor = isDark ? Colors.white10 : Colors.black12;
+
     return Row(
       children: [
         _buildIndexBadge(),
         const SizedBox(width: 8),
         Expanded(
-          child: Text(
-            card.front.replaceAll('\n', ' '),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white : AppColors.cSlate900,
+          flex: 4,
+          child: Container(
+            height: double.infinity,
+            decoration: BoxDecoration(
+              border: Border(left: BorderSide(color: borderColor)),
             ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: Text(
-            '|',
-            style: TextStyle(
-              color: isDark ? AppColors.cSlate600 : AppColors.cSlate300,
-              fontSize: 12,
+            child: CompactEditableCell(
+              text: card.front,
+              isEditing: editingCellId == '${originalIndex}_front',
+              onStartEditing: () => onStartEditing('${originalIndex}_front'),
+              onUpdate: (val) {
+                onUpdateCell(card, originalIndex, 'front', val);
+                onStartEditing(null);
+              },
+              isDark: isDark,
+              textAlign: TextAlign.center,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : AppColors.cSlate900,
+              ),
             ),
           ),
         ),
         Expanded(
-          child: Text(
-            card.back.replaceAll('\n', ' '),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
-              fontWeight: FontWeight.w500,
+          flex: 4,
+          child: Container(
+            height: double.infinity,
+            decoration: BoxDecoration(
+              border: Border(left: BorderSide(color: borderColor)),
+            ),
+            child: CompactEditableCell(
+              text: card.back,
+              isEditing: editingCellId == '${originalIndex}_back',
+              onStartEditing: () => onStartEditing('${originalIndex}_back'),
+              onUpdate: (val) {
+                onUpdateCell(card, originalIndex, 'back', val);
+                onStartEditing(null);
+              },
+              isDark: isDark,
+              textAlign: TextAlign.center,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ),
-        if (!hasActions) ...[
-          if (card.remark.isNotEmpty)
-            const Padding(
-              padding: EdgeInsets.only(left: 4),
-              child: Icon(
-                Icons.history_edu_rounded,
-                size: 14,
-                color: AppColors.cBrand600,
-              ),
-            ),
-          if (card.isFlagged)
-            const Padding(
-              padding: EdgeInsets.only(left: 4),
-              child: Icon(Icons.flag_rounded, size: 14, color: Colors.orange),
-            ),
-        ],
+        Container(
+          width: 36,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: borderColor)),
+          ),
+          child: Center(
+            child: !hasActions
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (card.remark.isNotEmpty)
+                        const Icon(
+                          Icons.history_edu_rounded,
+                          size: 14,
+                          color: AppColors.cBrand600,
+                        ),
+                      if (card.isFlagged)
+                        const Icon(
+                          Icons.flag_rounded,
+                          size: 14,
+                          color: Colors.orange,
+                        ),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ),
       ],
     );
   }
@@ -987,4 +1065,107 @@ class CompactModeManager extends ChangeNotifier {
   }
 
   bool isSimple(int keyColIdx) => keyColIdx == -1 || _isCompact;
+}
+
+class CompactEditableCell extends StatefulWidget {
+  final String text;
+  final bool isEditing;
+  final VoidCallback onStartEditing;
+  final Function(String) onUpdate;
+  final bool isDark;
+  final TextStyle style;
+  final TextAlign textAlign;
+  final EdgeInsetsGeometry padding;
+
+  const CompactEditableCell({
+    super.key,
+    required this.text,
+    required this.isEditing,
+    required this.onStartEditing,
+    required this.onUpdate,
+    required this.isDark,
+    required this.style,
+    this.textAlign = TextAlign.left,
+    this.padding = EdgeInsets.zero,
+  });
+
+  @override
+  State<CompactEditableCell> createState() => _CompactEditableCellState();
+}
+
+class _CompactEditableCellState extends State<CompactEditableCell> {
+  late TextEditingController _controller;
+  late FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.text);
+    _focusNode = FocusNode();
+    if (widget.isEditing) {
+      _focusNode.requestFocus();
+    }
+  }
+
+  @override
+  void didUpdateWidget(CompactEditableCell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isEditing && !oldWidget.isEditing) {
+      _controller.text = widget.text;
+      _focusNode.requestFocus();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.isEditing) {
+      return Container(
+        color: widget.isDark
+            ? AppColors.cSlate800
+            : Colors.blue.withValues(alpha: 0.1),
+        padding: widget.padding,
+        alignment: Alignment.center,
+        child: TextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          style: widget.style.copyWith(height: 1.2),
+          textAlign: widget.textAlign,
+          maxLines: null,
+          expands: true, // 시트처럼 셀 전체를 필드로 사용
+          decoration: const InputDecoration(
+            isDense: true,
+            contentPadding: EdgeInsets.zero,
+            border: InputBorder.none,
+          ),
+          onSubmitted: (val) => widget.onUpdate(val),
+          onTapOutside: (_) => widget.onUpdate(_controller.text),
+        ),
+      );
+    }
+    return InkWell(
+      onTap: widget.onStartEditing,
+      child: Container(
+        padding: widget.padding,
+        alignment: widget.textAlign == TextAlign.center
+            ? Alignment.center
+            : (widget.textAlign == TextAlign.right
+                  ? Alignment.centerRight
+                  : Alignment.centerLeft),
+        child: Text(
+          widget.text.replaceAll('\n', ' '),
+          style: widget.style,
+          textAlign: widget.textAlign,
+          maxLines: 2, // 간소화보기에서도 최대 2줄까지는 보이도록 허용
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+  }
 }

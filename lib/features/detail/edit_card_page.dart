@@ -13,6 +13,7 @@ class EditCardPage extends StatefulWidget {
   final int initialCardIndex;
   final FlashcardSet setInfo;
   final GoogleDriveService driveService;
+  final VoidCallback? onSetUpdated;
 
   const EditCardPage({
     super.key,
@@ -20,6 +21,7 @@ class EditCardPage extends StatefulWidget {
     required this.initialCardIndex,
     required this.setInfo,
     required this.driveService,
+    this.onSetUpdated,
   });
 
   @override
@@ -206,6 +208,7 @@ class _EditCardPageState extends State<EditCardPage> {
                           cardIndex: index,
                           setInfo: widget.setInfo,
                           driveService: widget.driveService,
+                          onSetUpdated: widget.onSetUpdated,
                           onSettingsToggle: (isOpen) {
                             setState(() {
                               _isEditorSettingsOpen = isOpen;

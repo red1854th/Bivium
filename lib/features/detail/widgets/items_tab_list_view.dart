@@ -12,9 +12,29 @@ class ItemsTabListView extends StatelessWidget {
   final bool isCompact;
   final bool isDark;
   final double itemExtent;
+  final String? editingCellId;
+  final Function(String?) onStartEditing;
+  final Function(Flashcard, int, String, String) onUpdateCell;
   final Function(int) onSelectedItemChanged;
-  final Function(Flashcard, int, int, bool) buildCardItem;
-  final Function(Flashcard, int, bool) buildFolderHeader;
+  final Widget Function(
+    Flashcard,
+    int,
+    int,
+    bool,
+    String?,
+    Function(String?),
+    Function(Flashcard, int, String, String),
+  )
+  buildCardItem;
+  final Widget Function(
+    Flashcard,
+    int,
+    bool,
+    String?,
+    Function(String?),
+    Function(Flashcard, int, String, String),
+  )
+  buildFolderHeader;
 
   const ItemsTabListView({
     super.key,
@@ -25,6 +45,9 @@ class ItemsTabListView extends StatelessWidget {
     required this.isCompact,
     required this.isDark,
     required this.itemExtent,
+    required this.editingCellId,
+    required this.onStartEditing,
+    required this.onUpdateCell,
     required this.onSelectedItemChanged,
     required this.buildCardItem,
     required this.buildFolderHeader,
@@ -79,7 +102,14 @@ class ItemsTabListView extends StatelessWidget {
                     builder: (context, index) {
                       final item = displayItems[index];
                       if (item is Map && item['type'] == 'group_header') {
-                        return buildFolderHeader(item['parent'], index, isDark);
+                        return buildFolderHeader(
+                          item['parent'],
+                          index,
+                          isDark,
+                          editingCellId,
+                          onStartEditing,
+                          onUpdateCell,
+                        );
                       }
                       final Flashcard card = item as Flashcard;
                       return buildCardItem(
@@ -87,6 +117,9 @@ class ItemsTabListView extends StatelessWidget {
                         allCards.indexOf(card),
                         index,
                         isDark,
+                        editingCellId,
+                        onStartEditing,
+                        onUpdateCell,
                       );
                     },
                   ),

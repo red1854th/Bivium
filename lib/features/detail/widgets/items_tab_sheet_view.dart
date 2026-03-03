@@ -11,7 +11,9 @@ class ItemsTabSheetView extends StatelessWidget {
   final String? editingCellId;
   final Function(Flashcard, int, String, String) onUpdateCell;
   final Function(String?) onStartEditing;
-  final VoidCallback onRefresh;
+  final Function(Flashcard) onToggleFolder;
+  final int remarkColIdx;
+  final VoidCallback onSetupRemarkCol;
 
   const ItemsTabSheetView({
     super.key,
@@ -21,7 +23,9 @@ class ItemsTabSheetView extends StatelessWidget {
     required this.editingCellId,
     required this.onUpdateCell,
     required this.onStartEditing,
-    required this.onRefresh,
+    required this.onToggleFolder,
+    required this.remarkColIdx,
+    required this.onSetupRemarkCol,
   });
 
   @override
@@ -38,8 +42,15 @@ class ItemsTabSheetView extends StatelessWidget {
     const double frontWidth = 240.0;
     const double backWidth = 240.0;
     const double remarkWidth = 160.0;
-    const double totalWidth =
-        rowNumWidth + keyWidth + frontWidth + backWidth + remarkWidth;
+
+    final bool hasRemark = remarkColIdx != -1;
+
+    final double totalWidth =
+        rowNumWidth +
+        keyWidth +
+        frontWidth +
+        backWidth +
+        (hasRemark ? remarkWidth : 0);
 
     return Container(
       margin: const EdgeInsets.only(top: 8, left: 16, right: 16, bottom: 4),
@@ -54,7 +65,9 @@ class ItemsTabSheetView extends StatelessWidget {
         child: SizedBox(
           width: totalWidth,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (!hasRemark) _buildRemarkSetupBanner(context),
               // 헤더
               Container(
                 height: 36,
@@ -65,11 +78,12 @@ class ItemsTabSheetView extends StatelessWidget {
                     _buildHeaderCell('Key', keyWidth, isDark),
                     _buildHeaderCell("source_label".tr(), frontWidth, isDark),
                     _buildHeaderCell("target_label".tr(), backWidth, isDark),
-                    _buildHeaderCell(
-                      "remark_col_label".tr(),
-                      remarkWidth,
-                      isDark,
-                    ),
+                    if (hasRemark)
+                      _buildHeaderCell(
+                        "remark_label".tr(),
+                        remarkWidth,
+                        isDark,
+                      ),
                   ],
                 ),
               ),
@@ -102,6 +116,7 @@ class ItemsTabSheetView extends StatelessWidget {
                         remarkWidth,
                         borderColor,
                         isDark,
+                        hasRemark,
                       );
                     }
 
@@ -148,16 +163,21 @@ class ItemsTabSheetView extends StatelessWidget {
                                 onUpdateCell(card, originalIdx, 'back', val),
                             cellId: '${originalIdx}_back',
                           ),
-                          _buildEditableCell(
-                            card.remark,
-                            remarkWidth,
-                            isDark,
-                            borderColor,
-                            onChanged: (val) =>
-                                onUpdateCell(card, originalIdx, 'remark', val),
-                            isSmall: true,
-                            cellId: '${originalIdx}_remark',
-                          ),
+                          if (hasRemark)
+                            _buildEditableCell(
+                              card.remark,
+                              remarkWidth,
+                              isDark,
+                              borderColor,
+                              onChanged: (val) => onUpdateCell(
+                                card,
+                                originalIdx,
+                                'remark',
+                                val,
+                              ),
+                              isSmall: true,
+                              cellId: '${originalIdx}_remark',
+                            ),
                         ],
                       ),
                     );
@@ -181,6 +201,7 @@ class ItemsTabSheetView extends StatelessWidget {
     double remarkWidth,
     Color borderColor,
     bool isDark,
+    bool hasRemark,
   ) {
     return Container(
       height: 44,
@@ -197,26 +218,13 @@ class ItemsTabSheetView extends StatelessWidget {
             ),
             child: Stack(
               children: [
-                Center(
-                  child: Text(
-                    '${originalIdx + 1}',
-                    style: TextStyle(
-                      color: isDark ? Colors.white24 : AppColors.cSlate300,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
                 Positioned(
-                  right: 4,
+                  left: 4,
                   top: 0,
                   bottom: 0,
                   child: Center(
                     child: InkWell(
-                      onTap: () {
-                        parent.isCollapsed = !parent.isCollapsed;
-                        onRefresh();
-                      },
+                      onTap: () => onToggleFolder(parent),
                       child: Container(
                         width: 14,
                         height: 14,
@@ -233,6 +241,19 @@ class ItemsTabSheetView extends StatelessWidget {
                           size: 10,
                           color: AppColors.cBrand600,
                         ),
+                      ),
+                    ),
+                  ),
+                ),
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 14),
+                    child: Text(
+                      '${originalIdx + 1}',
+                      style: TextStyle(
+                        color: isDark ? Colors.white24 : AppColors.cSlate300,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
@@ -268,17 +289,18 @@ class ItemsTabSheetView extends StatelessWidget {
             isBold: true,
             cellId: '${originalIdx}_back',
           ),
-          _buildEditableCell(
-            parent.remark,
-            remarkWidth,
-            isDark,
-            borderColor,
-            onChanged: (val) =>
-                onUpdateCell(parent, originalIdx, 'remark', val),
-            isSmall: true,
-            isBold: true,
-            cellId: '${originalIdx}_remark',
-          ),
+          if (hasRemark)
+            _buildEditableCell(
+              parent.remark,
+              remarkWidth,
+              isDark,
+              borderColor,
+              onChanged: (val) =>
+                  onUpdateCell(parent, originalIdx, 'remark', val),
+              isSmall: true,
+              isBold: true,
+              cellId: '${originalIdx}_remark',
+            ),
         ],
       ),
     );
@@ -366,6 +388,37 @@ class ItemsTabSheetView extends StatelessWidget {
         cellId: cellId,
         isEditing: editingCellId == cellId,
         onStartEditing: onStartEditing,
+      ),
+    );
+  }
+
+  Widget _buildRemarkSetupBanner(BuildContext context) {
+    return InkWell(
+      onTap: onSetupRemarkCol,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        color: isDark
+            ? AppColors.cBrand600.withValues(alpha: 0.1)
+            : AppColors.cBrand600.withValues(alpha: 0.05),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.add_circle_outline,
+              size: 16,
+              color: AppColors.cBrand600,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              "setup_remark_col".tr(),
+              style: const TextStyle(
+                color: AppColors.cBrand600,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

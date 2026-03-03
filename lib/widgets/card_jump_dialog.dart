@@ -38,14 +38,15 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
   double get _itemExtent => _isCompact ? 44.0 : 95.0;
   int _selectedDisplayIndex = 0;
   bool _hasChanges = false; // 폴더 접기/펼치기 변경사항 추적
+  String? _editingCellId;
 
   @override
   void initState() {
     super.initState();
 
     final searchMgr = SearchManager();
-    _isSearchPinned = searchMgr.isPinned;
-    if (_isSearchPinned) {
+    _isSearchPinned = true;
+    if (searchMgr.query.isNotEmpty) {
       _searchController.text = searchMgr.query;
     }
     searchMgr.addListener(_onSearchManagerChanged);
@@ -130,21 +131,14 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
   }
 
   void _onSearchChanged(String query) {
-    if (_isSearchPinned) {
-      SearchManager().update(query, true);
-    }
+    SearchManager().update(query, true);
     _updateDisplayItems();
     if (_wheelController.hasClients && _displayItems.isNotEmpty) {
       _wheelController.jumpToItem(0);
     }
   }
 
-  void _onPinToggled() {
-    setState(() {
-      _isSearchPinned = !_isSearchPinned;
-      SearchManager().update(_searchController.text, _isSearchPinned);
-    });
-  }
+  // _onPinToggled removed
 
   void _updateScrollPosition(Offset localPosition, double trackHeight) {
     if (_displayItems.length <= 1) return;
@@ -219,8 +213,9 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
                 controller: _searchController,
                 onChanged: _onSearchChanged,
                 isDark: isDark,
-                isPinned: _isSearchPinned,
-                onPinToggled: _onPinToggled,
+                isPinned: true,
+                onPinToggled: () {},
+                showPin: false,
                 showCompactToggle: true,
               ),
               Expanded(
@@ -300,6 +295,38 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
     );
   }
 
+  void _onUpdateCell(
+    Flashcard card,
+    int originalIdx,
+    String field,
+    String newValue,
+  ) async {
+    if (field == 'front' && card.front == newValue) return;
+    if (field == 'back' && card.back == newValue) return;
+
+    setState(() {
+      if (field == 'front') {
+        card.front = newValue;
+      } else if (field == 'back') {
+        card.back = newValue;
+      }
+      _hasChanges = true;
+    });
+
+    if (widget.driveService != null) {
+      try {
+        await widget.driveService!.updateFlashcard(
+          spreadsheetId: widget.setInfo.sheetId,
+          cardIndex: originalIdx,
+          setInfo: widget.setInfo,
+          card: card,
+        );
+      } catch (e) {
+        debugPrint('셀 수정 동기화 실패: $e');
+      }
+    }
+  }
+
   Widget _buildFolderHeader(Flashcard parent, int index, bool isDark) {
     final int originalIdx = widget.cards.indexOf(parent);
     double offset = _wheelController.hasClients
@@ -347,6 +374,9 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
           }
         }
       },
+      onStartEditing: (id) => setState(() => _editingCellId = id),
+      onUpdateCell: _onUpdateCell,
+      editingCellId: _editingCellId,
     );
   }
 
@@ -374,6 +404,9 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
         Navigator.pop(context, _hasChanges);
         widget.onCardSelected(originalIndex);
       },
+      onStartEditing: (id) => setState(() => _editingCellId = id),
+      onUpdateCell: _onUpdateCell,
+      editingCellId: _editingCellId,
     );
   }
 

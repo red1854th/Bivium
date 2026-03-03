@@ -36,7 +36,7 @@
     "key_col_label": "Key Column (optional)",
     "source_col_label": "Source Column",
     "target_col_label": "Target Column",
-    "remark_col_label": "Remark Column (optional)",
+    "remark_col_label": "Remark Column",
     "confirm": "Confirm",
     "none": "None",
     "check_connection_error": "Please check your account connection.",
@@ -62,6 +62,7 @@
     "add_glossary_entry": "Add Glossary Entry",
     "source_label": "Source",
     "target_label": "Target",
+    "remark_label": "Remark",
     "add": "Add",
     "background_save_failed": "Background save failed",
     "editor_settings": "Editor Settings",
@@ -90,5 +91,10 @@
     "extraction_regex": "Extraction Regex",
     "preview_results": "Preview Results",
     "no_matches_found": "No matches found",
-    "upload_and_create_project": "Upload and Create Project"
+    "upload_and_create_project": "Upload and Create Project",
+    "remark_page_setup": "Remark Page Setup",
+    "remark_setup_description": "No column is currently assigned to store remarks for this sheet. Please select a column where you want to save your notes.",
+    "select_remark_column": "Select Remark Data Column",
+    "choose_column": "Choose a column",
+    "setup_remark_col": "Setup Remark Column"
 }
