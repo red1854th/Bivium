@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:highlight/highlight.dart';
+import '../../models/glossary_item.dart';
 
 class HighlightRules {
   static Map<String, TextStyle> get gameTagPatterns => {
@@ -11,37 +12,75 @@ class HighlightRules {
     'tag-style': const TextStyle(color: Colors.orangeAccent),
   };
 
-  static Mode buildMode() {
-    return Mode(
-      // 'name' 파라미터를 제거했습니다.
-      contains: [
+  static Mode buildMode({List<GlossaryItem> glossary = const []}) {
+    final List<Mode> contains = [
+      Mode(
+        className: 'color-red',
+        begin: r'<color=(?:red|#FF0000|#ff0000)>',
+        end: r'<\/color>',
+      ),
+      Mode(
+        className: 'color-blue',
+        begin: r'<color=(?:blue|#0000FF|#0000ff)>',
+        end: r'<\/color>',
+      ),
+      Mode(
+        className: 'color-green',
+        begin: r'<color=(?:green|#00FF00|#00ff00)>',
+        end: r'<\/color>',
+      ),
+      Mode(className: 'color-any', begin: r'<color=[^>]+>', end: r'<\/color>'),
+      Mode(
+        className: 'section-range',
+        begin: r'§[0-9a-fA-fk-orR]',
+        end: r'$|§r',
+      ),
+      Mode(className: 'tag-style', begin: r'<\/?(?:b|i|size(?:=[^>]+)?)>'),
+    ];
+
+    // Create a flat list of (term, id) for all glossary items
+    final List<({String term, String id})> flatTerms = [];
+    for (final item in glossary) {
+      if (!item.isActive) continue;
+      if (item.source.isNotEmpty) {
+        flatTerms.add((term: item.source, id: item.id));
+      }
+      for (final t in item.targets) {
+        if (t.isNotEmpty) {
+          flatTerms.add((term: t, id: item.id));
+        }
+      }
+    }
+
+    // Sort by length descending to achieve "Longest Match"
+    flatTerms.sort((a, b) => b.term.length.compareTo(a.term.length));
+
+    // Add as separate modes in sorted order
+    for (final mapping in flatTerms) {
+      contains.add(
         Mode(
-          className: 'color-red',
-          begin: r'<color=(?:red|#FF0000|#ff0000)>',
-          end: r'<\/color>',
+          className: 'glossary-${mapping.id}',
+          begin: RegExp.escape(mapping.term),
         ),
-        Mode(
-          className: 'color-blue',
-          begin: r'<color=(?:blue|#0000FF|#0000ff)>',
-          end: r'<\/color>',
-        ),
-        Mode(
-          className: 'color-green',
-          begin: r'<color=(?:green|#00FF00|#00ff00)>',
-          end: r'<\/color>',
-        ),
-        Mode(
-          className: 'color-any',
-          begin: r'<color=[^>]+>',
-          end: r'<\/color>',
-        ),
-        Mode(
-          className: 'section-range',
-          begin: r'§[0-9a-fA-fk-orR]',
-          end: r'$|§r',
-        ),
-        Mode(className: 'tag-style', begin: r'<\/?(?:b|i|size(?:=[^>]+)?)>'),
-      ],
-    );
+      );
+    }
+
+    return Mode(contains: contains);
+  }
+
+  static Map<String, TextStyle> getStyles(List<GlossaryItem> glossary) {
+    final Map<String, TextStyle> styles = Map.from(gameTagPatterns);
+    for (final item in glossary) {
+      styles['glossary-${item.id}'] = TextStyle(
+        color: Color(int.parse(item.color.replaceFirst('#', '0xFF'))),
+        fontWeight: FontWeight.bold,
+        decoration: TextDecoration.underline,
+        decorationColor: Color(
+          int.parse(item.color.replaceFirst('#', '0xFF')),
+        ).withAlpha(120),
+        decorationThickness: 1.5,
+      );
+    }
+    return styles;
   }
 }

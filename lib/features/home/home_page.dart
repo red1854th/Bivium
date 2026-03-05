@@ -667,6 +667,7 @@ class _HomePageState extends State<HomePage> {
           onUpdate: () => _controller.saveData(),
           onDelete: () => _controller.removeSet(s.id),
           driveService: _driveService,
+          prefs: widget.prefs,
         ),
       ),
     );

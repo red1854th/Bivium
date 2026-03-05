@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme.dart';
 import '../../models/flashcard.dart';
 import '../../services/google_drive_service.dart';
@@ -16,6 +17,7 @@ class DetailPage extends StatefulWidget {
   final VoidCallback onDelete;
   final List<String> allTitles;
   final GoogleDriveService driveService;
+  final SharedPreferences prefs;
 
   const DetailPage({
     super.key,
@@ -24,6 +26,7 @@ class DetailPage extends StatefulWidget {
     required this.onDelete,
     required this.allTitles,
     required this.driveService,
+    required this.prefs,
   });
 
   @override
@@ -457,43 +460,55 @@ class _DetailPageState extends State<DetailPage> {
             ),
           ),
           Expanded(
-            child: isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.cBrand600,
+            child: Stack(
+              children: [
+                PageView(
+                  controller: _pageController,
+                  onPageChanged: (index) =>
+                      setState(() => _currentIndex = index),
+                  children: [
+                    ItemsTab(
+                      cards: cards,
+                      currentPageIndex: _currentCardPageIndex,
+                      onCardSelected: (index) =>
+                          setState(() => _currentCardPageIndex = index),
+                      onCardsUpdated: (updatedList, lastIndex) {
+                        setState(() {
+                          cards = updatedList;
+                          _currentCardPageIndex = lastIndex;
+                        });
+                      },
+                      onSetUpdated: () {
+                        widget.onUpdate();
+                        _fetchInitialData();
+                      },
+                      setInfo: widget.setInfo,
+                      driveService: widget.driveService,
                     ),
-                  )
-                : PageView(
-                    controller: _pageController,
-                    onPageChanged: (index) =>
-                        setState(() => _currentIndex = index),
-                    children: [
-                      ItemsTab(
-                        cards: cards,
-                        currentPageIndex: _currentCardPageIndex,
-                        onCardSelected: (index) =>
-                            setState(() => _currentCardPageIndex = index),
-                        onCardsUpdated: (updatedList, lastIndex) {
-                          setState(() {
-                            cards = updatedList;
-                            _currentCardPageIndex = lastIndex;
-                          });
-                        },
-                        onSetUpdated: () {
-                          widget.onUpdate();
-                          _fetchInitialData();
-                        },
-                        setInfo: widget.setInfo,
-                        driveService: widget.driveService,
+                    StatisticsTab(
+                      cards: cards,
+                      setInfo: widget.setInfo,
+                      onCardTap: _navigateToCard,
+                    ),
+                    GlossaryTab(
+                      cards: cards,
+                      setInfo: widget.setInfo,
+                      prefs: widget.prefs,
+                      onUpdate: widget.onUpdate,
+                    ),
+                  ],
+                ),
+                if (isLoading)
+                  Container(
+                    color: bgColor,
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.cBrand600,
                       ),
-                      StatisticsTab(
-                        cards: cards,
-                        setInfo: widget.setInfo,
-                        onCardTap: _navigateToCard,
-                      ),
-                      GlossaryTab(cards: cards),
-                    ],
+                    ),
                   ),
+              ],
+            ),
           ),
         ],
       ),

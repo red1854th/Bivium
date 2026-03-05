@@ -1,11 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:bivium/models/flashcard.dart';
+import 'package:bivium/models/glossary_item.dart';
 import 'package:bivium/services/google_drive_service.dart';
 import 'package:bivium/core/theme.dart';
 import 'package:bivium/features/editor/text_editor.dart';
 import 'package:bivium/features/detail/remark_page.dart';
 import 'package:bivium/features/detail/remark_setting_page.dart';
 import 'package:bivium/features/home/widgets/editor_settings_panel.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:bivium/models/substitution.dart';
 
 class CardEditor extends StatefulWidget {
   final Flashcard card;
@@ -57,12 +61,18 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
   late ZebraHighlightController _activeController;
   late UndoHistoryController _activeUndoController;
   bool _isFrontActive = true;
+  List<Substitution> _allSubstitutions = [];
+  List<GlossaryItem> _glossary = [];
+  String? _glossaryFeedback;
+  Timer? _feedbackTimer;
 
   @override
   void initState() {
     super.initState();
     _frontController = ZebraHighlightController()..text = widget.card.front;
     _backController = ZebraHighlightController()..text = widget.card.back;
+
+    _loadSubstitutions();
 
     _activeController = _frontController;
     _activeUndoController = _frontUndoController;
@@ -98,6 +108,23 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _loadSubstitutions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final globalJson = prefs.getString('global_substitutions') ?? '[]';
+    final globalSubs = Substitution.deserializeList(globalJson);
+
+    final projectJson = widget.setInfo.metadata?['substitutions'] ?? '[]';
+    final projectSubs = Substitution.deserializeList(projectJson);
+
+    final glossaryJson = widget.setInfo.metadata?['glossary'] ?? '[]';
+    final glossaryItems = GlossaryItem.deserializeList(glossaryJson);
+
+    setState(() {
+      _allSubstitutions = [...globalSubs, ...projectSubs];
+      _glossary = glossaryItems;
+    });
+  }
+
   void _notifyParent() {
     widget.onFocusChanged?.call(
       controller: _activeController,
@@ -114,7 +141,20 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
     _backController.dispose();
     _frontFocus.dispose();
     _backFocus.dispose();
+    _feedbackTimer?.cancel();
     super.dispose();
+  }
+
+  void _showGlossaryFeedback(GlossaryItem item) {
+    _feedbackTimer?.cancel();
+    setState(() {
+      _glossaryFeedback = "${item.source} → ${item.targets.join(', ')}";
+    });
+    _feedbackTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() => _glossaryFeedback = null);
+      }
+    });
   }
 
   @override
@@ -146,6 +186,9 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
               fontSize: widget.settings.fontSize,
               lineHeight: widget.settings.lineHeight,
               fontFamily: widget.settings.fontFamily,
+              substitutions: _allSubstitutions,
+              glossary: _glossary,
+              onGlossaryLongPress: _showGlossaryFeedback,
             ),
           ),
           _buildMiddleToolbar(isDark),
@@ -158,6 +201,9 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
               fontSize: widget.settings.fontSize,
               lineHeight: widget.settings.lineHeight,
               fontFamily: widget.settings.fontFamily,
+              substitutions: _allSubstitutions,
+              glossary: _glossary,
+              onGlossaryLongPress: _showGlossaryFeedback,
             ),
           ),
         ],
@@ -187,6 +233,9 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
       );
     }
 
+    final bool isEffectivelyExpanded =
+        _isToolbarExpanded || _glossaryFeedback != null;
+
     return Stack(
       alignment: Alignment.center,
       clipBehavior: Clip.none,
@@ -203,16 +252,18 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
         AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.fastOutSlowIn,
-          width: _isToolbarExpanded
+          width: isEffectivelyExpanded
               ? MediaQuery.of(context).size.width * 0.8
-              : 80, // 접혔을 때 터치 너비 확장
-          height: _isToolbarExpanded ? 44 : 32, // 접혔을 때 터치 높이 확장
+              : 80,
+          height: isEffectivelyExpanded ? 44 : 32,
           decoration: BoxDecoration(
-            color: _isToolbarExpanded
+            color: isEffectivelyExpanded
                 ? (isDark ? AppColors.cDarkSurface : Colors.white)
-                : Colors.transparent, // 접혔을 때는 배경 투명하게 (내부 캡슐만 보임)
-            borderRadius: BorderRadius.circular(_isToolbarExpanded ? 22 : 16),
-            boxShadow: _isToolbarExpanded
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(
+              isEffectivelyExpanded ? 22 : 16,
+            ),
+            boxShadow: isEffectivelyExpanded
                 ? [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.2),
@@ -221,7 +272,7 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
                     ),
                   ]
                 : [],
-            border: _isToolbarExpanded
+            border: isEffectivelyExpanded
                 ? Border.all(
                     color: isDark
                         ? Colors.white10
@@ -236,74 +287,112 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
                 setState(() => _isToolbarExpanded = true);
               }
             },
-            borderRadius: BorderRadius.circular(_isToolbarExpanded ? 22 : 16),
-            child: _isToolbarExpanded
-                ? Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _toolbarAction(
-                        icon: Icons.history_edu_rounded,
-                        color: widget.card.remark.isNotEmpty
-                            ? AppColors.cBrand600
-                            : (isDark ? AppColors.cSlate400 : Colors.grey),
-                        onTap: () {
-                          FocusScope.of(context).unfocus();
-                          _handleRemarkAction();
-                        },
+            borderRadius: BorderRadius.circular(
+              isEffectivelyExpanded ? 22 : 16,
+            ),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale: Tween<double>(
+                      begin: 0.95,
+                      end: 1.0,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                );
+              },
+              child: _glossaryFeedback != null
+                  ? Center(
+                      key: const ValueKey('glossary_feedback'),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          _glossaryFeedback!,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: isDark
+                                ? AppColors.cBrand600.withAlpha(200)
+                                : AppColors.cBrand600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      _toolbarAction(
-                        icon: widget.card.isFlagged
-                            ? Icons.flag
-                            : Icons.flag_outlined,
-                        color: widget.card.isFlagged
-                            ? Colors.orange
-                            : (isDark ? AppColors.cSlate400 : Colors.grey),
-                        onTap: () {
-                          FocusScope.of(context).unfocus();
-                          setState(
-                            () =>
-                                widget.card.isFlagged = !widget.card.isFlagged,
-                          );
-                        },
-                      ),
-                      _toolbarAction(
-                        icon: Icons.view_agenda_rounded,
-                        color: isDark ? AppColors.cSlate400 : Colors.grey,
-                        onTap: () {
-                          FocusScope.of(context).unfocus();
-                          widget.onLayoutToggle();
-                        },
-                        isVerticalIcon: true,
-                      ),
-                      _toolbarAction(
-                        icon: Icons.more_vert_rounded,
-                        color: isDark ? AppColors.cSlate400 : Colors.grey,
-                        onTap: () {
-                          FocusScope.of(context).unfocus();
-                          setState(() => _isToolbarExpanded = false);
-                          widget.onSettingsToggle();
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 16),
-                        color: isDark
-                            ? AppColors.cSlate600
-                            : Colors.grey.withValues(alpha: 0.5),
-                        onPressed: () =>
-                            setState(() => _isToolbarExpanded = false),
-                      ),
-                    ],
-                  )
-                : Center(
-                    child: Container(
-                      width: 50,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white24 : Colors.black12,
-                        borderRadius: BorderRadius.circular(3),
+                    )
+                  : _isToolbarExpanded
+                  ? Row(
+                      key: const ValueKey('toolbar_actions'),
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _toolbarAction(
+                          icon: Icons.history_edu_rounded,
+                          color: widget.card.remark.isNotEmpty
+                              ? AppColors.cBrand600
+                              : (isDark ? AppColors.cSlate400 : Colors.grey),
+                          onTap: () {
+                            FocusScope.of(context).unfocus();
+                            _handleRemarkAction();
+                          },
+                        ),
+                        _toolbarAction(
+                          icon: widget.card.isFlagged
+                              ? Icons.flag
+                              : Icons.flag_outlined,
+                          color: widget.card.isFlagged
+                              ? Colors.orange
+                              : (isDark ? AppColors.cSlate400 : Colors.grey),
+                          onTap: () {
+                            FocusScope.of(context).unfocus();
+                            setState(
+                              () => widget.card.isFlagged =
+                                  !widget.card.isFlagged,
+                            );
+                          },
+                        ),
+                        _toolbarAction(
+                          icon: Icons.view_agenda_rounded,
+                          color: isDark ? AppColors.cSlate400 : Colors.grey,
+                          onTap: () {
+                            FocusScope.of(context).unfocus();
+                            widget.onLayoutToggle();
+                          },
+                          isVerticalIcon: true,
+                        ),
+                        _toolbarAction(
+                          icon: Icons.more_vert_rounded,
+                          color: isDark ? AppColors.cSlate400 : Colors.grey,
+                          onTap: () {
+                            FocusScope.of(context).unfocus();
+                            setState(() => _isToolbarExpanded = false);
+                            widget.onSettingsToggle();
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 16),
+                          color: isDark
+                              ? AppColors.cSlate600
+                              : Colors.grey.withValues(alpha: 0.5),
+                          onPressed: () =>
+                              setState(() => _isToolbarExpanded = false),
+                        ),
+                      ],
+                    )
+                  : Center(
+                      key: const ValueKey('collapsed_handle'),
+                      child: Container(
+                        width: 50,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white24 : Colors.black12,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
                       ),
                     ),
-                  ),
+            ),
           ),
         ),
       ],
