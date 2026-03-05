@@ -131,5 +131,12 @@
     "edit_global_glossary": "Edit Global Glossary Item",
     "edit_project_glossary": "Edit Project Glossary Item",
     "global_glossary": "Global Glossary",
-    "project_glossary": "Project Glossary"
+    "project_glossary": "Project Glossary",
+    "file_decode_error": "Failed to decode file",
+    "import_file": "Import File",
+    "browse_files": "Browse Files",
+    "select_sample_text": "Select Sample Text",
+    "no_data": "No data",
+    "global_setting": "Global Setting",
+    "project_setting": "Project Setting"
 }

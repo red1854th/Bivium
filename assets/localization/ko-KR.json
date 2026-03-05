@@ -129,5 +129,12 @@
     "edit_global_glossary": "전역 용어 수정",
     "edit_project_glossary": "프로젝트 용어 수정",
     "global_glossary": "전역 용어집",
-    "project_glossary": "프로젝트 용어집"
+    "project_glossary": "프로젝트 용어집",
+    "file_decode_error": "파일 디코딩 실패",
+    "import_file": "파일 가져오기",
+    "browse_files": "파일 찾아보기",
+    "select_sample_text": "샘플 텍스트 선택",
+    "no_data": "데이터 없음",
+    "global_setting": "전역 설정",
+    "project_setting": "프로젝트 설정"
 }
