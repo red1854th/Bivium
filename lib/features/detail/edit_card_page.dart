@@ -13,6 +13,7 @@ import 'package:bivium/features/home/widgets/editor_settings_panel.dart';
 import 'package:bivium/features/editor/text_editor.dart';
 import 'package:bivium/models/toolbar_item.dart';
 import 'package:bivium/features/detail/toolbar_customize_page.dart';
+import 'dart:ui' as ui;
 
 class EditCardPage extends StatefulWidget {
   final List<Flashcard> cards;
@@ -37,9 +38,15 @@ class EditCardPage extends StatefulWidget {
 class _EditCardPageState extends State<EditCardPage> {
   late PageController _pageController;
   late int _currentPageIndex;
-  Axis _scrollDirection = Axis.horizontal;
   bool _isEditorSettingsOpen = false;
-  bool _isVertical = true;
+  bool _isVertical = false;
+
+  // Drawing Mode Setup
+  bool _isDrawingMode = false;
+  final Map<int, List<DrawingPath>> _paths = {};
+  DrawingPath? _currentPath;
+  Color _selectedColor = Colors.red;
+
   EditorSettings _settings = EditorSettings(
     fontSize: 19.0,
     lineHeight: 1.4,
@@ -99,7 +106,7 @@ class _EditCardPageState extends State<EditCardPage> {
       }
     }
     setState(() {
-      _isVertical = prefs.getBool('is_editor_vertical') ?? true;
+      _isVertical = prefs.getBool('is_editor_vertical') ?? false;
       _settings = EditorSettings(
         fontSize: prefs.getDouble('editor_font_size') ?? 19.0,
         lineHeight: prefs.getDouble('editor_line_height') ?? 1.4,
@@ -251,16 +258,11 @@ class _EditCardPageState extends State<EditCardPage> {
           actions: [
             IconButton(
               icon: Icon(
-                _scrollDirection == Axis.horizontal
-                    ? Icons.swap_vert_rounded
-                    : Icons.swap_horiz_rounded,
+                _isDrawingMode ? Icons.draw : Icons.draw_outlined,
+                color: _isDrawingMode ? AppColors.cBrand600 : null,
                 size: 22,
               ),
-              onPressed: () => setState(
-                () => _scrollDirection = _scrollDirection == Axis.horizontal
-                    ? Axis.vertical
-                    : Axis.horizontal,
-              ),
+              onPressed: () => setState(() => _isDrawingMode = !_isDrawingMode),
             ),
             const SizedBox(width: 8),
           ],
@@ -276,7 +278,7 @@ class _EditCardPageState extends State<EditCardPage> {
                   children: [
                     PageView.builder(
                       controller: _pageController,
-                      scrollDirection: _scrollDirection,
+                      scrollDirection: Axis.horizontal,
                       itemCount: widget.cards.length,
                       onPageChanged: (idx) {
                         _saveChanges(_currentPageIndex);
@@ -333,7 +335,108 @@ class _EditCardPageState extends State<EditCardPage> {
                         );
                       },
                     ),
-                    if (!_isEditorSettingsOpen) ...[
+                    // Drawing Canvas Overlay
+                    if (_isDrawingMode)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          onPanStart: (details) {
+                            setState(() {
+                              _currentPath = DrawingPath(
+                                points: [details.localPosition],
+                                color: _selectedColor,
+                              );
+                            });
+                          },
+                          onPanUpdate: (details) {
+                            if (_currentPath != null) {
+                              setState(() {
+                                _currentPath!.points.add(details.localPosition);
+                              });
+                            }
+                          },
+                          onPanEnd: (details) {
+                            if (_currentPath != null) {
+                              setState(() {
+                                _paths
+                                    .putIfAbsent(_currentPageIndex, () => [])
+                                    .add(_currentPath!);
+                                _currentPath = null;
+                              });
+                            }
+                          },
+                          child: CustomPaint(
+                            painter: ScreenPainter(
+                              paths: _paths[_currentPageIndex] ?? [],
+                              currentPath: _currentPath,
+                            ),
+                          ),
+                        ),
+                      ),
+                    // Drawing Toolbar
+                    if (_isDrawingMode)
+                      Positioned(
+                        top: 20,
+                        right: 20,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.cDarkSurface
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black12, blurRadius: 8),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              ...[
+                                Colors.red,
+                                Colors.blue,
+                                Colors.green,
+                                Colors.orange,
+                                AppColors.cSlate800,
+                              ].map(
+                                (c) => GestureDetector(
+                                  onTap: () =>
+                                      setState(() => _selectedColor = c),
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      color: c,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: _selectedColor == c
+                                            ? AppColors.cBrand600
+                                            : Colors.transparent,
+                                        width: 2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.delete_outline,
+                                  color: isDark ? Colors.white : Colors.black,
+                                  size: 20,
+                                ),
+                                onPressed: () => setState(
+                                  () => _paths[_currentPageIndex]?.clear(),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (!_isEditorSettingsOpen && !_isDrawingMode) ...[
                       _buildEdgeHandle(isLeft: true),
                       _buildEdgeHandle(isLeft: false),
                     ],
@@ -542,4 +645,61 @@ class _EditCardPageState extends State<EditCardPage> {
       ),
     );
   }
+}
+
+class DrawingPath {
+  final List<Offset> points;
+  final Color color;
+  final double width;
+
+  DrawingPath({required this.points, required this.color, this.width = 3.0});
+}
+
+class ScreenPainter extends CustomPainter {
+  final List<DrawingPath> paths;
+  final DrawingPath? currentPath;
+
+  ScreenPainter({required this.paths, this.currentPath});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    for (final path in paths) {
+      paint.color = path.color;
+      paint.strokeWidth = path.width;
+      paint.style = PaintingStyle.stroke;
+      if (path.points.length > 1) {
+        final ui.Path drawPath = ui.Path();
+        drawPath.moveTo(path.points[0].dx, path.points[0].dy);
+        for (int i = 1; i < path.points.length; i++) {
+          drawPath.lineTo(path.points[i].dx, path.points[i].dy);
+        }
+        canvas.drawPath(drawPath, paint);
+      } else if (path.points.length == 1) {
+        canvas.drawCircle(
+          path.points[0],
+          path.width / 2,
+          paint..style = PaintingStyle.fill,
+        );
+      }
+    }
+
+    if (currentPath != null && currentPath!.points.length > 1) {
+      paint.color = currentPath!.color;
+      paint.strokeWidth = currentPath!.width;
+      paint.style = PaintingStyle.stroke;
+      final ui.Path drawPath = ui.Path();
+      drawPath.moveTo(currentPath!.points[0].dx, currentPath!.points[0].dy);
+      for (int i = 1; i < currentPath!.points.length; i++) {
+        drawPath.lineTo(currentPath!.points[i].dx, currentPath!.points[i].dy);
+      }
+      canvas.drawPath(drawPath, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
