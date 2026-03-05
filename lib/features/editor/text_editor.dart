@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:highlight/highlight.dart' show highlight, Node;
 import 'highlight_rules.dart';
@@ -39,6 +40,7 @@ class _TextEditorState extends State<TextEditor> {
   void initState() {
     super.initState();
     widget.controller.glossary = widget.glossary;
+    widget.controller.onGlossaryLongPress = widget.onGlossaryLongPress;
     _updateHighlighting();
   }
 
@@ -49,6 +51,9 @@ class _TextEditorState extends State<TextEditor> {
       widget.controller.glossary = widget.glossary;
       _updateHighlighting();
     }
+    if (widget.onGlossaryLongPress != oldWidget.onGlossaryLongPress) {
+      widget.controller.onGlossaryLongPress = widget.onGlossaryLongPress;
+    }
   }
 
   void _updateHighlighting() {
@@ -58,44 +63,31 @@ class _TextEditorState extends State<TextEditor> {
     );
   }
 
-  void _handleLongPress() {
-    final offset = widget.controller.selection.baseOffset;
-    if (offset >= 0) {
-      final item = widget.controller.getGlossaryItemAt(offset);
-      if (item != null) {
-        widget.onGlossaryLongPress?.call(item);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return GestureDetector(
-      onLongPress: _handleLongPress,
-      child: TextField(
-        controller: widget.controller,
-        focusNode: widget.focusNode,
-        undoController: widget.undoController,
-        maxLines: null,
-        expands: true,
-        textAlignVertical: TextAlignVertical.center,
-        style: TextStyle(
-          fontSize: widget.fontSize,
-          fontFamily: widget.fontFamily,
-          height: widget.lineHeight,
-          color: isDark ? Colors.white : Colors.black87,
-        ),
-        decoration: const InputDecoration(
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        ),
-        onChanged: (value) {
-          widget.controller.applySubstitutions(widget.substitutions);
-          widget.onChanged(widget.controller.text);
-        },
+    return TextField(
+      controller: widget.controller,
+      focusNode: widget.focusNode,
+      undoController: widget.undoController,
+      maxLines: null,
+      expands: true,
+      textAlignVertical: TextAlignVertical.center,
+      style: TextStyle(
+        fontSize: widget.fontSize,
+        fontFamily: widget.fontFamily,
+        height: widget.lineHeight,
+        color: isDark ? Colors.white : Colors.black87,
       ),
+      decoration: const InputDecoration(
+        border: InputBorder.none,
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+      onChanged: (value) {
+        widget.controller.applySubstitutions(widget.substitutions);
+        widget.onChanged(widget.controller.text);
+      },
     );
   }
 }
@@ -103,31 +95,38 @@ class _TextEditorState extends State<TextEditor> {
 class ZebraHighlightController extends TextEditingController {
   bool _isSubstituting = false;
   List<GlossaryItem> _glossary = [];
+  Function(GlossaryItem)? onGlossaryLongPress;
+  final Map<String, LongPressGestureRecognizer> _recognizers = {};
+
+  LongPressGestureRecognizer _getRecognizer(String className) {
+    if (!_recognizers.containsKey(className)) {
+      _recognizers[className] = LongPressGestureRecognizer()
+        ..onLongPress = () {
+          if (onGlossaryLongPress != null) {
+            final id = className.substring('glossary-'.length);
+            try {
+              final item = _glossary.firstWhere((e) => e.id == id);
+              onGlossaryLongPress!(item);
+            } catch (_) {}
+          }
+        };
+    }
+    return _recognizers[className]!;
+  }
+
+  @override
+  void dispose() {
+    for (final recognizer in _recognizers.values) {
+      recognizer.dispose();
+    }
+    super.dispose();
+  }
 
   set glossary(List<GlossaryItem> value) {
     if (_glossary != value) {
       _glossary = value;
       notifyListeners();
     }
-  }
-
-  GlossaryItem? getGlossaryItemAt(int offset) {
-    if (offset < 0 || offset >= text.length || _glossary.isEmpty) return null;
-
-    final sortedItems = List<GlossaryItem>.from(_glossary)
-      ..sort((a, b) => b.source.length.compareTo(a.source.length));
-
-    for (final item in sortedItems) {
-      if (!item.isActive) continue;
-      final terms = [item.source, ...item.targets].where((t) => t.isNotEmpty);
-      for (final t in terms) {
-        final matches = RegExp(RegExp.escape(t)).allMatches(text);
-        for (final m in matches) {
-          if (offset >= m.start && offset < m.end) return item;
-        }
-      }
-    }
-    return null;
   }
 
   void applySubstitutions(List<Substitution> substitutions) {
@@ -253,7 +252,13 @@ class ZebraHighlightController extends TextEditingController {
             ),
           );
         } else {
-          finalSpans.add(TextSpan(text: char, style: span.style));
+          finalSpans.add(
+            TextSpan(
+              text: char,
+              style: span.style,
+              recognizer: span.recognizer,
+            ),
+          );
         }
       }
     }
@@ -264,15 +269,25 @@ class ZebraHighlightController extends TextEditingController {
   List<TextSpan> _convertNodes(
     List<Node> nodes,
     TextStyle? baseStyle,
-    Map<String, TextStyle> dynamicStyles,
-  ) {
+    Map<String, TextStyle> dynamicStyles, [
+    GestureRecognizer? parentRecognizer,
+  ]) {
     final List<TextSpan> spans = [];
     for (var node in nodes) {
       final TextStyle? nodeStyle = dynamicStyles[node.className] ?? baseStyle;
+      final bool isGlossary = node.className?.startsWith('glossary-') ?? false;
+      final recognizer = isGlossary
+          ? _getRecognizer(node.className!)
+          : parentRecognizer;
+
       if (node.value != null) {
-        spans.add(TextSpan(text: node.value, style: nodeStyle));
+        spans.add(
+          TextSpan(text: node.value, style: nodeStyle, recognizer: recognizer),
+        );
       } else if (node.children != null) {
-        spans.addAll(_convertNodes(node.children!, nodeStyle, dynamicStyles));
+        spans.addAll(
+          _convertNodes(node.children!, nodeStyle, dynamicStyles, recognizer),
+        );
       }
     }
     return spans;

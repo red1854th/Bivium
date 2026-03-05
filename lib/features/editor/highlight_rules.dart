@@ -12,6 +12,40 @@ class HighlightRules {
     'tag-style': const TextStyle(color: Colors.orangeAccent),
   };
 
+  static String buildGlossaryRegex(String term) {
+    if (term.isEmpty) return '';
+
+    String makeCaseInsensitive(String text) {
+      return text
+          .split('')
+          .map((char) {
+            if (RegExp(r'[a-zA-Z]').hasMatch(char)) {
+              return '[${char.toLowerCase()}${char.toUpperCase()}]';
+            }
+            return RegExp.escape(char);
+          })
+          .join('');
+    }
+
+    final isEnglish = RegExp(r'^[a-zA-Z\s\-]+$').hasMatch(term);
+    if (!isEnglish) {
+      return makeCaseInsensitive(term);
+    }
+
+    String pattern;
+    if (term.toLowerCase().endsWith('y')) {
+      final base = makeCaseInsensitive(term.substring(0, term.length - 1));
+      pattern = '$base(?:[yY]|[iI][eE][sS])';
+    } else if (RegExp(r'(s|x|z|ch|sh)$', caseSensitive: false).hasMatch(term)) {
+      final base = makeCaseInsensitive(term);
+      pattern = '$base(?:[eE][sS])?';
+    } else {
+      final base = makeCaseInsensitive(term);
+      pattern = '$base(?:[sS]|[eE][sS])?';
+    }
+    return '\\b$pattern\\b';
+  }
+
   static Mode buildMode({List<GlossaryItem> glossary = const []}) {
     final List<Mode> contains = [
       Mode(
@@ -57,12 +91,12 @@ class HighlightRules {
 
     // Add as separate modes in sorted order
     for (final mapping in flatTerms) {
-      contains.add(
-        Mode(
-          className: 'glossary-${mapping.id}',
-          begin: RegExp.escape(mapping.term),
-        ),
-      );
+      final regexStr = buildGlossaryRegex(mapping.term);
+      if (regexStr.isNotEmpty) {
+        contains.add(
+          Mode(className: 'glossary-${mapping.id}', begin: regexStr),
+        );
+      }
     }
 
     return Mode(contains: contains);
