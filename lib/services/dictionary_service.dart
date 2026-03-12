@@ -22,11 +22,14 @@ class DictionaryService {
 
     try {
       await Future.wait([
-        _loadCategory('assets/dict/meongsa.txt', meongsa),
-        _loadCategory('assets/dict/eogeun.txt', eogeun),
-        _loadCategory('assets/dict/josa.txt', josa),
-        _loadCategory('assets/dict/eomaleomi.txt', eomaleomi),
-        _loadCategory('assets/dict/seoneomaleomi.txt', seoneomaleomi),
+        _loadCategory('assets/NIKLdic/meongsa.dic', meongsa),
+        _loadCategory('assets/NIKLdic/eogeun.dic', eogeun),
+        _loadCategory('assets/NIKLdic/josa.dic', josa),
+        _loadCategory('assets/NIKLdic/eomaleomi.dic', eomaleomi),
+        _loadCategory('assets/NIKLdic/seoneomaleomi.dic', seoneomaleomi),
+        _loadCategory('assets/NIKLdic/danwi.dic', meongsa), // 단위도 명사 취급
+        _loadCategory('assets/NIKLdic/jeopdusa.dic', eogeun), // 접두사도 어근 취급
+        _loadCategory('assets/NIKLdic/jeopmisa.dic', eomaleomi), // 접미사도 어미 취급
       ]);
       _isInitialized = true;
     } catch (e) {
@@ -41,9 +44,10 @@ class DictionaryService {
       final data = await rootBundle.loadString(path);
       final lines = data.split('\n');
       for (var line in lines) {
-        final trimmed = line.trim();
-        if (trimmed.isNotEmpty) {
-          targetSet.add(trimmed);
+        // NIKL 사전의 접사 표시(-) 제거 및 공백 정리
+        final cleaned = line.replaceAll('-', '').trim();
+        if (cleaned.isNotEmpty) {
+          targetSet.add(cleaned);
         }
       }
     } catch (_) {

@@ -7,9 +7,9 @@ import '../../models/flashcard.dart';
 import '../../services/google_drive_service.dart';
 import '../home/edit_project_page.dart';
 import 'tabs/items_tab.dart';
-import 'tabs/statistics_tab.dart';
-import 'tabs/glossary_tab.dart';
-import '../../widgets/card_list_common.dart';
+import 'package:bivium/features/detail/tabs/statistics_tab.dart';
+import 'package:bivium/features/detail/tabs/glossary_tab.dart';
+import 'package:bivium/widgets/card_list_common.dart';
 
 class DetailPage extends StatefulWidget {
   final FlashcardSet setInfo;
@@ -230,6 +230,11 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   void _navigateToCard(int index) {
+    if (index == -1) {
+      // 검색 버튼으로 인한 이동인 경우 카드 목록 탭(0)으로 즉시 전환
+      _onTabTapped(0);
+      return;
+    }
     if (index < 0 || index >= cards.length) return;
     setState(() => _currentCardPageIndex = index);
     _onTabTapped(0);

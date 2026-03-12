@@ -38,7 +38,7 @@ flutter:
   # 모든 에셋은 하나의 assets 섹션에 모아야 합니다.
   assets:
     - assets/icon/
-    - assets/NIKLdic/
+    - assets/dict/
     - assets/data/
     - assets/fonts/
     - assets/localization/

@@ -24,6 +24,8 @@ class AppColors {
   static const cRed50 = Color(0xFFFEF2F2);
   static const cRed100 = Color(0xFFFEE2E2);
   static const cRed700 = Color(0xFFB91C1C);
+  static const cAmber50 = Color(0xFFFFFBEB);
+  static const cAmber700 = Color(0xFFB45309);
 
   static const cBg = Colors.white;
   static const cSurface = cSlate50;
