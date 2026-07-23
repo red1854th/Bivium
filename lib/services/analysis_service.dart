@@ -366,8 +366,9 @@ List<SimilarGroup> _findSimilarTask(List<Flashcard> cards) {
 
   for (int i = 0; i < cards.length; i++) {
     if (processed.contains(i)) continue;
-    if (wordSets[i].length < 2)
+    if (wordSets[i].length < 2) {
       continue; // Skip very short phrases for global analysis
+    }
 
     final List<Flashcard> currentGroup = [cards[i]];
     processed.add(i);

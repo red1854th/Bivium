@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme.dart';
+import '../../core/responsive.dart';
 import '../../models/flashcard.dart';
 import '../../services/google_drive_service.dart';
 import 'add_set_dialog.dart';
@@ -266,32 +267,40 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: ThemeService.getBackgroundColor(isDark),
       resizeToAvoidBottomInset: false,
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildAppBar(isDark),
-            Expanded(
-              child: _controller.isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildMainContent(isDark),
-            ),
-          ],
+        child: ConstrainedContent(
+          child: Column(
+            children: [
+              _buildAppBar(isDark),
+              Expanded(
+                child: _controller.isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _buildMainContent(isDark),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildAppBar(bool isDark) {
+    final isDesktop = Responsive.isDesktop(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: EdgeInsets.symmetric(
+        horizontal: isDesktop ? 40 : 20,
+        vertical: isDesktop ? 24 : 16,
+      ),
       child: Row(
         children: [
-          if (!_controller.isSearching) ...[
+          if (!_controller.isSearching || isDesktop) ...[
             _buildLogo(isDark),
-            const Spacer(),
-          ] else ...[
+            if (isDesktop) const SizedBox(width: 40),
+          ],
+          if (_controller.isSearching || isDesktop) ...[
             _buildSearchField(isDark),
             const SizedBox(width: 8),
           ],
+          if (!isDesktop) const Spacer(),
           _buildActionButtons(isDark),
         ],
       ),
@@ -332,6 +341,13 @@ class _HomePageState extends State<HomePage> {
   Widget _buildMainContent(bool isDark) {
     if (_controller.sets.isEmpty) return _buildEmptyState(isDark);
 
+    return ResponsiveLayout(
+      mobile: (context) => _buildMobileContent(isDark),
+      desktop: (context) => _buildDesktopContent(isDark),
+    );
+  }
+
+  Widget _buildMobileContent(bool isDark) {
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
@@ -342,6 +358,45 @@ class _HomePageState extends State<HomePage> {
         SliverToBoxAdapter(child: _buildListHeader(isDark)),
         _buildSliverReorderableList(isDark),
         const SliverToBoxAdapter(child: SizedBox(height: 40)),
+      ],
+    );
+  }
+
+  Widget _buildDesktopContent(bool isDark) {
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      slivers: [
+        if (!_controller.isSearching) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: _buildRecentSection(isDark),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 32)),
+        ],
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: _buildListHeader(isDark),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 400,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              mainAxisExtent: 100,
+            ),
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final s = _controller.filteredSets[index];
+              return _buildDesktopSetCard(s, index, isDark);
+            }, childCount: _controller.filteredSets.length),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 60)),
       ],
     );
   }
@@ -386,43 +441,49 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildRecentCard(FlashcardSet s, bool isDark) {
+    final isDesktop = Responsive.isDesktop(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: InkWell(
-        onTap: () => _navigateToDetail(s),
-        child: CustomPaint(
-          painter: ManuscriptLinePainter(
-            isHorizontal: true,
-            isDark: isDark,
-            seedId: s.id,
-          ),
-          child: Container(
-            width: 110,
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '¶',
-                  style: TextStyle(
-                    color: AppColors.cBrand600,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+      child: Tooltip(
+        message:
+            "${s.title}\n${"last_accessed".tr()}: ${DateFormat.yMd().add_Hm().format(s.lastAccessed)}",
+        child: InkWell(
+          onTap: () => _navigateToDetail(s),
+          child: CustomPaint(
+            painter: ManuscriptLinePainter(
+              isHorizontal: true,
+              isDark: isDark,
+              seedId: s.id,
+            ),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: isDesktop ? 180 : 110,
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '¶',
+                    style: TextStyle(
+                      color: AppColors.cBrand600,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const Spacer(),
-                Text(
-                  s.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                    height: 1.2,
-                    color: isDark ? Colors.white : AppColors.cSlate900,
+                  const Spacer(),
+                  Text(
+                    s.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: isDesktop ? 14 : 12,
+                      height: 1.2,
+                      color: isDark ? Colors.white : AppColors.cSlate900,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -540,6 +601,137 @@ class _HomePageState extends State<HomePage> {
           onChanged: (val) => _controller.setSearchQuery(val),
         ),
       ),
+    );
+  }
+
+  Widget _buildDesktopSetCard(FlashcardSet s, int index, bool isDark) {
+    return _buildContextMenuWrapper(
+      s,
+      child: Tooltip(
+        message: s.description.isNotEmpty ? s.description : s.title,
+        child: InkWell(
+          onTap: () => _navigateToDetail(s),
+          borderRadius: BorderRadius.circular(8),
+          child: CustomPaint(
+            painter: ManuscriptLinePainter(
+              isHorizontal: false,
+              isDark: isDark,
+              seedId: s.id,
+            ),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+              child: Row(
+                children: [
+                  Text(
+                    '¶',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? AppColors.cSlate500 : AppColors.cSlate400,
+                      fontFamily: 'serif',
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          s.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                            color: isDark ? Colors.white : AppColors.cSlate900,
+                          ),
+                        ),
+                        if (s.description.isNotEmpty)
+                          Text(
+                            s.description,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark
+                                  ? AppColors.cSlate400
+                                  : AppColors.cSlate500,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.more_vert, size: 20),
+                    onPressed: () => _showEditProject(s),
+                    color: AppColors.cSlate400,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContextMenuWrapper(FlashcardSet s, {required Widget child}) {
+    return GestureDetector(
+      onSecondaryTapDown: (details) {
+        final overlay =
+            Overlay.of(context).context.findRenderObject() as RenderBox;
+        showMenu(
+          context: context,
+          position: RelativeRect.fromRect(
+            details.globalPosition & const Size(40, 40),
+            Offset.zero & overlay.size,
+          ),
+          items: [
+            PopupMenuItem(
+              onTap: () =>
+                  Future.delayed(Duration.zero, () => _navigateToDetail(s)),
+              child: Row(
+                children: [
+                  const Icon(Icons.open_in_new, size: 18),
+                  const SizedBox(width: 8),
+                  Text("open".tr()),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              onTap: () =>
+                  Future.delayed(Duration.zero, () => _showEditProject(s)),
+              child: Row(
+                children: [
+                  const Icon(Icons.edit_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  Text("edit".tr()),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              onTap: () => Future.delayed(
+                Duration.zero,
+                () => _controller.removeSet(s.id),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                  const SizedBox(width: 8),
+                  Text(
+                    "delete".tr(),
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+      child: child,
     );
   }
 

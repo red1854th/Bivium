@@ -135,5 +135,11 @@
     "select_sample_text": "选择示例文本",
     "no_data": "没有数据",
     "global_setting": "全局设置",
-    "project_setting": "项目设置"
+    "project_setting": "项目设置",
+    "filter_flagged": "仅标记",
+    "filter_with_remark": "有备注",
+    "filter_without_remark": "无备注",
+    "offline_mode": "离线模式 - 更改将在在线时同步",
+    "sync_pending": "等待同步",
+    "unsaved_changes": "未保存的更改"
 }

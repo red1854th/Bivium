@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme.dart';
 import '../../core/locales.dart';
+import '../../core/responsive.dart';
 import '../../services/google_drive_service.dart';
 import '../../models/substitution.dart';
 import '../../models/glossary_item.dart';
@@ -129,6 +130,7 @@ class _SettingPageState extends State<SettingPage> {
         backgroundColor: ThemeService.getBackgroundColor(isDark),
         surfaceTintColor: ThemeService.getBackgroundColor(isDark),
         elevation: 0,
+        centerTitle: true,
         title: Text(
           'settings'.tr(),
           style: TextStyle(
@@ -140,174 +142,187 @@ class _SettingPageState extends State<SettingPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 다크 모드 설정
-                  _buildSettingTile(
-                    isDark,
-                    icon: Icons.dark_mode,
-                    label: 'dark_mode'.tr(),
-                    trailing: Switch(
-                      value: _isDarkMode,
-                      onChanged: _toggleDarkMode,
-                      activeThumbColor: AppColors.cBrand600,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // 언어 설정 (Dropdown 대신 모달 호출 방식)
-                  _buildSettingTile(
-                    isDark,
-                    icon: Icons.language,
-                    label: 'language_settings'.tr(),
-                    onTap: () => _showLanguagePicker(context, isDark),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          currentLanguageName,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: isDark
-                                ? AppColors.cSlate400
-                                : AppColors.cSlate500,
-                          ),
+          : SingleChildScrollView(
+              child: ConstrainedContent(
+                maxWidth: 600,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSectionTitle('general'.tr(), isDark),
+                      const SizedBox(height: 12),
+                      _buildSettingTile(
+                        isDark,
+                        icon: Icons.dark_mode,
+                        label: 'dark_mode'.tr(),
+                        trailing: Switch(
+                          value: _isDarkMode,
+                          onChanged: _toggleDarkMode,
+                          activeThumbColor: AppColors.cBrand600,
                         ),
-                        const Icon(
+                      ),
+                      const SizedBox(height: 12),
+                      _buildSettingTile(
+                        isDark,
+                        icon: Icons.language,
+                        label: 'language_settings'.tr(),
+                        onTap: () => _showLanguagePicker(context, isDark),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              currentLanguageName,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isDark
+                                    ? AppColors.cSlate400
+                                    : AppColors.cSlate500,
+                              ),
+                            ),
+                            const Icon(
+                              Icons.chevron_right,
+                              size: 20,
+                              color: AppColors.cSlate400,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      _buildSectionTitle('editor'.tr(), isDark),
+                      const SizedBox(height: 12),
+                      _buildSettingTile(
+                        isDark,
+                        icon: Icons.find_replace,
+                        label: 'text_substitution_settings'.tr(),
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SubstitutionManagementPage(
+                                prefs: _prefs,
+                                isGlobal: true,
+                              ),
+                            ),
+                          );
+                          setState(() {});
+                        },
+                        trailing: const Icon(
                           Icons.chevron_right,
                           size: 20,
                           color: AppColors.cSlate400,
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  _buildSettingTile(
-                    isDark,
-                    icon: Icons.find_replace,
-                    label: 'text_substitution_settings'.tr(),
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => SubstitutionManagementPage(
-                            prefs: _prefs,
-                            isGlobal: true,
-                          ),
-                        ),
-                      );
-                      setState(() {});
-                    },
-                    trailing: const Icon(
-                      Icons.chevron_right,
-                      size: 20,
-                      color: AppColors.cSlate400,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  Text(
-                    'account'.tr(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? AppColors.cSlate400 : AppColors.cSlate500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // 계정 정보 섹션
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: _tileDecoration(isDark),
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: isDark
-                              ? AppColors.cSlate700
-                              : AppColors.cSlate100,
-                          backgroundImage: account?.photoUrl != null
-                              ? NetworkImage(account!.photoUrl!)
-                              : null,
-                          child: account?.photoUrl == null
-                              ? Icon(
-                                  Icons.person,
-                                  color: isDark
-                                      ? AppColors.cSlate400
-                                      : AppColors.cSlate600,
-                                )
-                              : null,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                account?.displayName ?? 'not_signed_in'.tr(),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: isDark
-                                      ? Colors.white
-                                      : AppColors.cSlate900,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                account?.email ?? 'sign_in_desc'.tr(),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isDark
-                                      ? AppColors.cSlate400
-                                      : AppColors.cSlate500,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // 로그인/로그아웃 버튼
-                  SizedBox(
-                    width: double.infinity,
-                    child: account == null
-                        ? ElevatedButton(
-                            onPressed: _signIn,
-                            style: _buttonStyle(isDark, isPrimary: true),
-                            child: Text(
-                              'sign_in_with_google'.tr(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
+                      ),
+                      const SizedBox(height: 32),
+                      _buildSectionTitle('account'.tr(), isDark),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: _tileDecoration(isDark),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 24,
+                              backgroundColor: isDark
+                                  ? AppColors.cSlate700
+                                  : AppColors.cSlate100,
+                              backgroundImage: account?.photoUrl != null
+                                  ? NetworkImage(account!.photoUrl!)
+                                  : null,
+                              child: account?.photoUrl == null
+                                  ? Icon(
+                                      Icons.person,
+                                      size: 28,
+                                      color: isDark
+                                          ? AppColors.cSlate400
+                                          : AppColors.cSlate600,
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    account?.displayName ??
+                                        'not_signed_in'.tr(),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: isDark
+                                          ? Colors.white
+                                          : AppColors.cSlate900,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    account?.email ?? 'sign_in_desc'.tr(),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: isDark
+                                          ? AppColors.cSlate400
+                                          : AppColors.cSlate500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
                               ),
                             ),
-                          )
-                        : OutlinedButton(
-                            onPressed: _signOut,
-                            style: _buttonStyle(isDark, isPrimary: false),
-                            child: Text(
-                              'sign_out'.tr(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: account == null
+                            ? ElevatedButton.icon(
+                                onPressed: _signIn,
+                                icon: const Icon(Icons.login),
+                                style: _buttonStyle(isDark, isPrimary: true),
+                                label: Text(
+                                  'sign_in_with_google'.tr(),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              )
+                            : OutlinedButton.icon(
+                                onPressed: _signOut,
+                                icon: const Icon(Icons.logout),
+                                style: _buttonStyle(isDark, isPrimary: false),
+                                label: Text(
+                                  'sign_out'.tr(),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
+                      ),
+                      const SizedBox(height: 40),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        title.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.2,
+          color: isDark ? AppColors.cSlate500 : AppColors.cSlate400,
+        ),
+      ),
     );
   }
 

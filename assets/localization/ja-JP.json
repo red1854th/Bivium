@@ -135,5 +135,11 @@
     "select_sample_text": "サンプルテキストを選択",
     "no_data": "データがありません",
     "global_setting": "グローバル設定",
-    "project_setting": "プロジェクト設定"
+    "project_setting": "プロジェクト設定",
+    "filter_flagged": "フラグ付きのみ",
+    "filter_with_remark": "Remarkあり",
+    "filter_without_remark": "Remarkなし",
+    "offline_mode": "オフラインモード - 変更はオンライン時に同期されます",
+    "sync_pending": "同期待ち",
+    "unsaved_changes": "未保存の変更"
 }

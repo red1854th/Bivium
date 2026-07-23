@@ -585,6 +585,83 @@ class GoogleDriveService {
     }
   }
 
+  Future<void> syncCards({
+    required String spreadsheetId,
+    required FlashcardSet setInfo,
+    required List<Flashcard> cards,
+  }) async {
+    final client = await _getAuthenticatedClient();
+    if (client == null) return;
+
+    final sheetsApi = sheets.SheetsApi(client);
+    try {
+      // Build batch update requests for all modified cards
+      final List<sheets.Request> requests = [];
+      for (int i = 0; i < cards.length; i++) {
+        final card = cards[i];
+        final color = card.isFlagged
+            ? sheets.Color(red: 1.0, green: 0.98, blue: 0.77)
+            : sheets.Color(red: 1.0, green: 1.0, blue: 1.0);
+
+        requests.add(
+          _buildCellReq(
+            setInfo.gid,
+            i + 1, // +1 because header row is row 0
+            setInfo.frontColIdx,
+            card.front,
+            color,
+          ),
+        );
+        requests.add(
+          _buildCellReq(
+            setInfo.gid,
+            i + 1,
+            setInfo.backColIdx,
+            card.back,
+            null,
+          ),
+        );
+
+        if (setInfo.remarkColIdx != -1) {
+          requests.add(
+            _buildCellReq(
+              setInfo.gid,
+              i + 1,
+              setInfo.remarkColIdx,
+              card.remark,
+              null,
+            ),
+          );
+        }
+
+        if (setInfo.keyColIdx != -1) {
+          requests.add(
+            _buildCellReq(
+              setInfo.gid,
+              i + 1,
+              setInfo.keyColIdx,
+              card.key,
+              null,
+            ),
+          );
+        }
+      }
+
+      // Execute in batches of 100 (Google Sheets API limit)
+      for (int i = 0; i < requests.length; i += 100) {
+        final end = (i + 100 > requests.length) ? requests.length : i + 100;
+        final batch = requests.sublist(i, end);
+        await sheetsApi.spreadsheets.batchUpdate(
+          sheets.BatchUpdateSpreadsheetRequest(requests: batch),
+          spreadsheetId,
+        );
+      }
+    } catch (e) {
+      debugPrint('일괄 동기화 실패: $e');
+      rethrow;
+    }
+  }
+
   Future<void> uploadInitialData(
     String spreadsheetId,
     List<String> headers,

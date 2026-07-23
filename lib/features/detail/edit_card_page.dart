@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/services/google_drive_service.dart';
 import 'package:bivium/core/theme.dart';
+import 'package:bivium/core/responsive.dart';
+import 'package:bivium/core/keyboard_shortcuts.dart';
 import 'card_editor.dart';
 import 'package:bivium/widgets/card_jump_dialog.dart';
 import 'package:bivium/features/home/widgets/editor_settings_panel.dart';
@@ -14,6 +16,7 @@ import 'package:bivium/features/editor/text_editor.dart';
 import 'package:bivium/models/toolbar_item.dart';
 import 'package:bivium/features/detail/toolbar_customize_page.dart';
 import 'dart:ui' as ui;
+import 'package:bivium/widgets/card_list_common.dart';
 
 class EditCardPage extends StatefulWidget {
   final List<Flashcard> cards;
@@ -198,273 +201,411 @@ class _EditCardPageState extends State<EditCardPage> {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool isDesktop = Responsive.isDesktop(context);
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        _handlePop();
+    return BiviumShortcuts(
+      bindings: {
+        AppShortcuts.save: () => _saveChanges(_currentPageIndex),
+        AppShortcuts.nextCard: () {
+          if (_currentPageIndex < widget.cards.length - 1) {
+            _pageController.nextPage(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+          }
+        },
+        AppShortcuts.prevCard: () {
+          if (_currentPageIndex > 0) {
+            _pageController.previousPage(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+          }
+        },
+        AppShortcuts.search: () =>
+            SearchManager().showSearchDialog(context, widget.cards, (idx) {
+              if (idx != -1) _pageController.jumpToPage(idx);
+            }),
+        AppShortcuts.toggleFlag: () {
+          setState(() {
+            widget.cards[_currentPageIndex].isFlagged =
+                !widget.cards[_currentPageIndex].isFlagged;
+          });
+          _saveChanges(_currentPageIndex);
+        },
+        AppShortcuts.jumpTo: _showCardJumpDialog,
+        AppShortcuts.close: _handlePop,
       },
-      child: Scaffold(
-        resizeToAvoidBottomInset: true,
-        backgroundColor: isDark ? AppColors.cDarkSurface : AppColors.cSlate50,
-        appBar: AppBar(
-          toolbarHeight: 40,
-          systemOverlayStyle: SystemUiOverlayStyle(
-            statusBarColor: Colors.transparent,
-            statusBarIconBrightness: isDark
-                ? Brightness.light
-                : Brightness.dark,
-          ),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: _handlePop,
-          ),
-          title: InkWell(
-            onTap: _showCardJumpDialog,
-            borderRadius: BorderRadius.circular(50),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '${_currentPageIndex + 1}/${widget.cards.length}',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      height: 1.1,
-                      color: isDark ? AppColors.cSlate200 : AppColors.cSlate800,
-                    ),
-                  ),
-                  if (widget.setInfo.keyColIdx != -1 &&
-                      widget.cards[_currentPageIndex].key.isNotEmpty)
-                    Text(
-                      widget.cards[_currentPageIndex].key,
-                      style: TextStyle(
-                        fontSize: 10,
-                        height: 1.0,
-                        color:
-                            (isDark ? AppColors.cSlate200 : AppColors.cSlate800)
-                                .withValues(alpha: 0.5),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
-              ),
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          _handlePop();
+        },
+        child: Scaffold(
+          resizeToAvoidBottomInset: true,
+          backgroundColor: isDark ? AppColors.cDarkSurface : AppColors.cSlate50,
+          appBar: AppBar(
+            toolbarHeight: 40,
+            systemOverlayStyle: SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: isDark
+                  ? Brightness.light
+                  : Brightness.dark,
             ),
-          ),
-          actions: [
-            IconButton(
-              icon: Icon(
-                _isDrawingMode ? Icons.draw : Icons.draw_outlined,
-                color: _isDrawingMode ? AppColors.cBrand600 : null,
-                size: 22,
-              ),
-              onPressed: () => setState(() => _isDrawingMode = !_isDrawingMode),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: _handlePop,
             ),
-            const SizedBox(width: 8),
-          ],
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-          centerTitle: true,
-        ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: Stack(
+            title: InkWell(
+              onTap: _showCardJumpDialog,
+              borderRadius: BorderRadius.circular(50),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 2,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    PageView.builder(
-                      controller: _pageController,
-                      scrollDirection: Axis.horizontal,
-                      itemCount: widget.cards.length,
-                      onPageChanged: (idx) {
-                        _saveChanges(_currentPageIndex);
-                        if (mounted) {
-                          setState(() {
-                            _currentPageIndex = idx;
-                            // 활성 컨트롤러 초기화 (새 카드로 넘어갈 때)
-                            _activeController = null;
-                            _activeUndoController = null;
-                          });
-                        }
-                      },
-                      itemBuilder: (context, index) {
-                        return AnimatedBuilder(
-                          animation: _pageController,
-                          builder: (context, child) {
-                            double page = _pageController.hasClients
-                                ? (_pageController.page ?? index.toDouble())
-                                : index.toDouble();
-                            double angle = (page - index) * (math.pi / 35);
-                            return Transform.rotate(
-                              angle: angle,
-                              child: CardEditor(
-                                key: ValueKey(
-                                  'editor_${widget.cards[index].key}_$index',
-                                ),
-                                card: widget.cards[index],
-                                cardIndex: index,
-                                setInfo: widget.setInfo,
-                                driveService: widget.driveService,
-                                isVertical: _isVertical,
-                                settings: _settings,
-                                onSetUpdated: widget.onSetUpdated,
-                                onLayoutToggle: _toggleLayout,
-                                onSettingsToggle: () => setState(
-                                  () => _isEditorSettingsOpen = true,
-                                ),
-                                onToolbarCustomize: _openToolbarCustomize,
-                                onFocusChanged:
-                                    ({
-                                      controller,
-                                      undoController,
-                                      required isFront,
-                                    }) {
-                                      setState(() {
-                                        _activeController = controller;
-                                        _activeUndoController = undoController;
-                                        _isFrontActive = isFront;
-                                      });
-                                    },
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                    // Drawing Canvas Overlay
-                    if (_isDrawingMode)
-                      Positioned.fill(
-                        child: GestureDetector(
-                          onPanStart: (details) {
-                            setState(() {
-                              _currentPath = DrawingPath(
-                                points: [details.localPosition],
-                                color: _selectedColor,
-                              );
-                            });
-                          },
-                          onPanUpdate: (details) {
-                            if (_currentPath != null) {
-                              setState(() {
-                                _currentPath!.points.add(details.localPosition);
-                              });
-                            }
-                          },
-                          onPanEnd: (details) {
-                            if (_currentPath != null) {
-                              setState(() {
-                                _paths
-                                    .putIfAbsent(_currentPageIndex, () => [])
-                                    .add(_currentPath!);
-                                _currentPath = null;
-                              });
-                            }
-                          },
-                          child: CustomPaint(
-                            painter: ScreenPainter(
-                              paths: _paths[_currentPageIndex] ?? [],
-                              currentPath: _currentPath,
-                            ),
-                          ),
-                        ),
+                    Text(
+                      '${_currentPageIndex + 1}/${widget.cards.length}',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        height: 1.1,
+                        color: isDark
+                            ? AppColors.cSlate200
+                            : AppColors.cSlate800,
                       ),
-                    // Drawing Toolbar
-                    if (_isDrawingMode)
-                      Positioned(
-                        top: 20,
-                        right: 20,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? AppColors.cDarkSurface
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(color: Colors.black12, blurRadius: 8),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              ...[
-                                Colors.red,
-                                Colors.blue,
-                                Colors.green,
-                                Colors.orange,
-                                AppColors.cSlate800,
-                              ].map(
-                                (c) => GestureDetector(
-                                  onTap: () =>
-                                      setState(() => _selectedColor = c),
-                                  child: Container(
-                                    margin: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                    ),
-                                    width: 24,
-                                    height: 24,
-                                    decoration: BoxDecoration(
-                                      color: c,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: _selectedColor == c
-                                            ? AppColors.cBrand600
-                                            : Colors.transparent,
-                                        width: 2,
+                    ),
+                    if (widget.setInfo.keyColIdx != -1 &&
+                        widget.cards[_currentPageIndex].key.isNotEmpty)
+                      Text(
+                        widget.cards[_currentPageIndex].key,
+                        style: TextStyle(
+                          fontSize: 10,
+                          height: 1.0,
+                          color:
+                              (isDark
+                                      ? AppColors.cSlate200
+                                      : AppColors.cSlate800)
+                                  .withValues(alpha: 0.5),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              IconButton(
+                icon: Icon(
+                  _isDrawingMode ? Icons.draw : Icons.draw_outlined,
+                  color: _isDrawingMode ? AppColors.cBrand600 : null,
+                  size: 22,
+                ),
+                onPressed: () =>
+                    setState(() => _isDrawingMode = !_isDrawingMode),
+                tooltip: "drawing_mode".tr(),
+              ),
+              const SizedBox(width: 8),
+            ],
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            centerTitle: true,
+          ),
+          body: SafeArea(
+            child: Row(
+              children: [
+                if (isDesktop) _buildSidePanel(isDark),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            PageView.builder(
+                              controller: _pageController,
+                              scrollDirection: Axis.horizontal,
+                              itemCount: widget.cards.length,
+                              onPageChanged: (idx) {
+                                _saveChanges(_currentPageIndex);
+                                if (mounted) {
+                                  setState(() {
+                                    _currentPageIndex = idx;
+                                    // 활성 컨트롤러 초기화 (새 카드로 넘어갈 때)
+                                    _activeController = null;
+                                    _activeUndoController = null;
+                                  });
+                                }
+                              },
+                              itemBuilder: (context, index) {
+                                return AnimatedBuilder(
+                                  animation: _pageController,
+                                  builder: (context, child) {
+                                    double page = _pageController.hasClients
+                                        ? (_pageController.page ??
+                                              index.toDouble())
+                                        : index.toDouble();
+                                    double angle =
+                                        (page - index) * (math.pi / 35);
+                                    return Transform.rotate(
+                                      angle: angle,
+                                      child: CardEditor(
+                                        key: ValueKey(
+                                          'editor_${widget.cards[index].key}_$index',
+                                        ),
+                                        card: widget.cards[index],
+                                        cardIndex: index,
+                                        setInfo: widget.setInfo,
+                                        driveService: widget.driveService,
+                                        isVertical: _isVertical,
+                                        settings: _settings,
+                                        onSetUpdated: widget.onSetUpdated,
+                                        onLayoutToggle: _toggleLayout,
+                                        onSettingsToggle: () => setState(
+                                          () => _isEditorSettingsOpen = true,
+                                        ),
+                                        onToolbarCustomize:
+                                            _openToolbarCustomize,
+                                        onFocusChanged:
+                                            ({
+                                              controller,
+                                              undoController,
+                                              required isFront,
+                                            }) {
+                                              setState(() {
+                                                _activeController = controller;
+                                                _activeUndoController =
+                                                    undoController;
+                                                _isFrontActive = isFront;
+                                              });
+                                            },
                                       ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                            // Drawing Canvas Overlay
+                            if (_isDrawingMode)
+                              Positioned.fill(
+                                child: GestureDetector(
+                                  onPanStart: (details) {
+                                    setState(() {
+                                      _currentPath = DrawingPath(
+                                        points: [details.localPosition],
+                                        color: _selectedColor,
+                                      );
+                                    });
+                                  },
+                                  onPanUpdate: (details) {
+                                    if (_currentPath != null) {
+                                      setState(() {
+                                        _currentPath!.points.add(
+                                          details.localPosition,
+                                        );
+                                      });
+                                    }
+                                  },
+                                  onPanEnd: (details) {
+                                    if (_currentPath != null) {
+                                      setState(() {
+                                        _paths
+                                            .putIfAbsent(
+                                              _currentPageIndex,
+                                              () => [],
+                                            )
+                                            .add(_currentPath!);
+                                        _currentPath = null;
+                                      });
+                                    }
+                                  },
+                                  child: CustomPaint(
+                                    painter: ScreenPainter(
+                                      paths: _paths[_currentPageIndex] ?? [],
+                                      currentPath: _currentPath,
                                     ),
                                   ),
                                 ),
                               ),
-                              IconButton(
-                                icon: Icon(
-                                  Icons.delete_outline,
-                                  color: isDark ? Colors.white : Colors.black,
-                                  size: 20,
-                                ),
-                                onPressed: () => setState(
-                                  () => _paths[_currentPageIndex]?.clear(),
+                            // Drawing Toolbar
+                            if (_isDrawingMode)
+                              Positioned(
+                                top: 20,
+                                right: 20,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? AppColors.cDarkSurface
+                                        : Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black12,
+                                        blurRadius: 8,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      ...[
+                                        Colors.red,
+                                        Colors.blue,
+                                        Colors.green,
+                                        Colors.orange,
+                                        AppColors.cSlate800,
+                                      ].map(
+                                        (c) => GestureDetector(
+                                          onTap: () => setState(
+                                            () => _selectedColor = c,
+                                          ),
+                                          child: Container(
+                                            margin: const EdgeInsets.symmetric(
+                                              horizontal: 4,
+                                            ),
+                                            width: 24,
+                                            height: 24,
+                                            decoration: BoxDecoration(
+                                              color: c,
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: _selectedColor == c
+                                                    ? AppColors.cBrand600
+                                                    : Colors.transparent,
+                                                width: 2,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: Icon(
+                                          Icons.delete_outline,
+                                          color: isDark
+                                              ? Colors.white
+                                              : Colors.black,
+                                          size: 20,
+                                        ),
+                                        onPressed: () => setState(
+                                          () => _paths[_currentPageIndex]
+                                              ?.clear(),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
+                            if (!_isEditorSettingsOpen &&
+                                !_isDrawingMode &&
+                                !isDesktop) ...[
+                              _buildEdgeHandle(isLeft: true),
+                              _buildEdgeHandle(isLeft: false),
                             ],
-                          ),
+                            if (_isEditorSettingsOpen)
+                              Positioned.fill(
+                                child: GestureDetector(
+                                  onTap: () => setState(
+                                    () => _isEditorSettingsOpen = false,
+                                  ),
+                                  child: Container(color: Colors.black45),
+                                ),
+                              ),
+                            EditorSettingsPanel(
+                              isVisible: _isEditorSettingsOpen,
+                              currentSettings: _settings,
+                              card: widget.cards[_currentPageIndex],
+                              cardIndex: _currentPageIndex,
+                              onSettingsChanged: (s) =>
+                                  setState(() => _settings = s),
+                              onToolbarCustomize:
+                                  _openToolbarCustomize, // 콜백 전달
+                              onClose: () =>
+                                  setState(() => _isEditorSettingsOpen = false),
+                            ),
+                          ],
                         ),
                       ),
-                    if (!_isEditorSettingsOpen && !_isDrawingMode) ...[
-                      _buildEdgeHandle(isLeft: true),
-                      _buildEdgeHandle(isLeft: false),
+                      _buildFixedBottomToolbar(isDark),
                     ],
-                    if (_isEditorSettingsOpen)
-                      Positioned.fill(
-                        child: GestureDetector(
-                          onTap: () =>
-                              setState(() => _isEditorSettingsOpen = false),
-                          child: Container(color: Colors.black45),
-                        ),
-                      ),
-                    EditorSettingsPanel(
-                      isVisible: _isEditorSettingsOpen,
-                      currentSettings: _settings,
-                      card: widget.cards[_currentPageIndex],
-                      cardIndex: _currentPageIndex,
-                      onSettingsChanged: (s) => setState(() => _settings = s),
-                      onToolbarCustomize: _openToolbarCustomize, // 콜백 전달
-                      onClose: () =>
-                          setState(() => _isEditorSettingsOpen = false),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-              _buildFixedBottomToolbar(isDark),
-            ],
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSidePanel(bool isDark) {
+    return Container(
+      width: 240,
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cDarkBg : AppColors.cBg,
+        border: Border(
+          right: BorderSide(color: isDark ? Colors.white10 : Colors.black12),
+        ),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                const Icon(Icons.list, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  "items_tab".tr(),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: widget.cards.length,
+              itemExtent: 44,
+              itemBuilder: (context, index) {
+                final card = widget.cards[index];
+                final isSelected = index == _currentPageIndex;
+                return ListTile(
+                  dense: true,
+                  selected: isSelected,
+                  selectedTileColor: AppColors.cBrand600.withValues(alpha: 0.1),
+                  leading: Text(
+                    "${index + 1}",
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white38 : Colors.black38,
+                    ),
+                  ),
+                  title: Text(
+                    card.key.isNotEmpty ? card.key : card.front,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  trailing: card.isFlagged
+                      ? const Icon(Icons.flag, size: 14, color: Colors.orange)
+                      : null,
+                  onTap: () => _pageController.jumpToPage(index),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

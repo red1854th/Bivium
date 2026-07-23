@@ -138,5 +138,11 @@
     "select_sample_text": "Select Sample Text",
     "no_data": "No data",
     "global_setting": "Global Setting",
-    "project_setting": "Project Setting"
+    "project_setting": "Project Setting",
+    "filter_flagged": "Flagged only",
+    "filter_with_remark": "With remark",
+    "filter_without_remark": "Without remark",
+    "offline_mode": "Offline mode - changes will sync when online",
+    "sync_pending": "Sync pending changes",
+    "unsaved_changes": "Unsaved changes"
 }

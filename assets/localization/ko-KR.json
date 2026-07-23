@@ -136,5 +136,11 @@
     "select_sample_text": "샘플 텍스트 선택",
     "no_data": "데이터 없음",
     "global_setting": "전역 설정",
-    "project_setting": "프로젝트 설정"
+    "project_setting": "프로젝트 설정",
+    "filter_flagged": "플래그됨만",
+    "filter_with_remark": "Remark 있음",
+    "filter_without_remark": "Remark 없음",
+    "offline_mode": "오프라인 모드 - 변경사항은 온라인 시 동기화됩니다",
+    "sync_pending": "동기화 대기 중",
+    "unsaved_changes": "저장되지 않은 변경사항"
 }

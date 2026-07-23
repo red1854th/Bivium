@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/core/theme.dart';
+import 'package:bivium/core/responsive.dart';
 import 'package:bivium/services/google_drive_service.dart';
 import 'package:bivium/widgets/card_list_common.dart';
 
@@ -194,18 +195,26 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Size size = MediaQuery.of(context).size;
+    final bool isDesktop = Responsive.isDesktop(context);
 
     return Center(
       child: Material(
         color: Colors.transparent,
         child: Container(
-          width: size.width * 0.9,
-          height: size.height * 0.65,
+          width: isDesktop ? 600 : size.width * 0.9,
+          height: isDesktop ? 700 : size.height * 0.65,
           decoration: BoxDecoration(
             color: isDark
-                ? AppColors.cDarkSurface.withValues(alpha: 0.8)
-                : Colors.white.withValues(alpha: 0.9),
+                ? AppColors.cDarkSurface.withValues(alpha: 0.95)
+                : Colors.white.withValues(alpha: 0.95),
             borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
           child: Column(
             children: [
@@ -221,6 +230,9 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
+                    if (isDesktop) {
+                      return _buildDesktopListView(isDark);
+                    }
                     return Stack(
                       children: [
                         _displayItems.isEmpty
@@ -292,6 +304,26 @@ class _CardJumpDialogState extends State<CardJumpDialog> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDesktopListView(bool isDark) {
+    if (_displayItems.isEmpty) {
+      return Center(child: Text("no_search_results".tr()));
+    }
+
+    return ListView.builder(
+      itemCount: _displayItems.length,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemBuilder: (context, index) {
+        final item = _displayItems[index];
+        if (item is Map && item['type'] == 'group_header') {
+          return _buildFolderHeader(item['parent'], index, isDark);
+        }
+        final Flashcard card = item as Flashcard;
+        final int originalIndex = widget.cards.indexOf(card);
+        return _buildCardItem(card, originalIndex, index, isDark);
+      },
     );
   }
 

@@ -8,6 +8,7 @@ import 'package:bivium/features/detail/edit_card_page.dart';
 import 'package:bivium/widgets/card_list_common.dart';
 import 'package:bivium/features/detail/widgets/items_tab_list_view.dart';
 import 'package:bivium/features/detail/remark_setting_page.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 // ItemsTabMode enum removed
 
@@ -41,6 +42,11 @@ class _ItemsTabState extends State<ItemsTab> {
   bool _isSearchPinned = true;
   bool _isCompact = false;
   // ItemsTabMode _mode removed
+
+  // --- 조합 필터 상태 ---
+  bool _filterFlaggedOnly = false;
+  bool _filterWithRemarkOnly = false;
+  bool _filterWithoutRemarkOnly = false;
 
   List<dynamic> _displayItems = [];
   double get _itemExtent => _isCompact ? 44.0 : 95.0;
@@ -180,6 +186,9 @@ class _ItemsTabState extends State<ItemsTab> {
         searchQuery: _searchController.text,
         // targetIndex가 명시되면(예: 편집후 리턴) 그것을 사용, 아니면 안정된 예외 인덱스 사용
         currentTargetIndex: targetIndex ?? _exceptionIndex,
+        filterFlaggedOnly: _filterFlaggedOnly,
+        filterWithRemarkOnly: _filterWithRemarkOnly,
+        filterWithoutRemarkOnly: _filterWithoutRemarkOnly,
       );
     });
   }
@@ -190,6 +199,40 @@ class _ItemsTabState extends State<ItemsTab> {
     if (_wheelController.hasClients && _displayItems.isNotEmpty) {
       _wheelController.jumpToItem(0);
     }
+  }
+
+  /// 필터 토글
+  void _toggleFilterFlagged() {
+    setState(() {
+      _filterFlaggedOnly = !_filterFlaggedOnly;
+      if (_filterFlaggedOnly) {
+        _filterWithRemarkOnly = false;
+        _filterWithoutRemarkOnly = false;
+      }
+    });
+    _updateDisplayItems();
+  }
+
+  void _toggleFilterWithRemark() {
+    setState(() {
+      _filterWithRemarkOnly = !_filterWithRemarkOnly;
+      if (_filterWithRemarkOnly) {
+        _filterFlaggedOnly = false;
+        _filterWithoutRemarkOnly = false;
+      }
+    });
+    _updateDisplayItems();
+  }
+
+  void _toggleFilterWithoutRemark() {
+    setState(() {
+      _filterWithoutRemarkOnly = !_filterWithoutRemarkOnly;
+      if (_filterWithoutRemarkOnly) {
+        _filterFlaggedOnly = false;
+        _filterWithRemarkOnly = false;
+      }
+    });
+    _updateDisplayItems();
   }
 
   @override
@@ -219,6 +262,35 @@ class _ItemsTabState extends State<ItemsTab> {
                 onPinToggled: () {},
                 showPin: false,
                 showCompactToggle: true,
+                additionalActions: [
+                  const SizedBox(width: 8),
+                  // Flag 필터 버튼
+                  _buildFilterButton(
+                    isDark: isDark,
+                    isActive: _filterFlaggedOnly,
+                    icon: Icons.flag_rounded,
+                    tooltip: "filter_flagged".tr(),
+                    onTap: _toggleFilterFlagged,
+                  ),
+                  const SizedBox(width: 8),
+                  // Remark 있음 필터 버튼
+                  _buildFilterButton(
+                    isDark: isDark,
+                    isActive: _filterWithRemarkOnly,
+                    icon: Icons.history_edu_rounded,
+                    tooltip: "filter_with_remark".tr(),
+                    onTap: _toggleFilterWithRemark,
+                  ),
+                  const SizedBox(width: 8),
+                  // Remark 없음 필터 버튼
+                  _buildFilterButton(
+                    isDark: isDark,
+                    isActive: _filterWithoutRemarkOnly,
+                    icon: Icons.history_edu_outlined,
+                    tooltip: "filter_without_remark".tr(),
+                    onTap: _toggleFilterWithoutRemark,
+                  ),
+                ],
               ),
               Expanded(
                 child: ItemsTabListView(
@@ -248,6 +320,45 @@ class _ItemsTabState extends State<ItemsTab> {
               ),
               const SizedBox(height: 16),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterButton({
+    required bool isDark,
+    required bool isActive,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: isActive
+          ? AppColors.cBrand600.withValues(alpha: 0.15)
+          : (isDark ? AppColors.cSlate800 : AppColors.cSlate100),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: isActive
+                ? Border.all(color: AppColors.cBrand600, width: 1.5)
+                : null,
+          ),
+          child: Tooltip(
+            message: tooltip,
+            child: Icon(
+              icon,
+              size: 20,
+              color: isActive
+                  ? AppColors.cBrand600
+                  : (isDark ? Colors.white38 : Colors.black38),
+            ),
           ),
         ),
       ),

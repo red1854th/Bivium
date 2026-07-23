@@ -100,6 +100,9 @@ class CardListUtils {
     required List<Flashcard> allCards,
     required String searchQuery,
     int? currentTargetIndex,
+    bool filterFlaggedOnly = false,
+    bool filterWithRemarkOnly = false,
+    bool filterWithoutRemarkOnly = false,
   }) {
     final query = searchQuery.toLowerCase();
     List<dynamic> result = [];
@@ -111,12 +114,29 @@ class CardListUtils {
       final bool isParent = checkHasChildren(i, allCards);
       final bool isCurrentTarget = (i == currentTargetIndex);
 
+      // --- 조합 필터: 플래그 + Remark + 검색어 ---
+      bool matchesQuery = true;
       if (query.isNotEmpty) {
-        if (card.front.toLowerCase().contains(query) ||
+        matchesQuery =
+            card.front.toLowerCase().contains(query) ||
             card.back.toLowerCase().contains(query) ||
-            card.key.toLowerCase().contains(query)) {
-          result.add(card);
-        }
+            card.key.toLowerCase().contains(query);
+      }
+
+      bool matchesFlag = true;
+      if (filterFlaggedOnly) {
+        matchesFlag = card.isFlagged;
+      }
+
+      bool matchesRemark = true;
+      if (filterWithRemarkOnly) {
+        matchesRemark = card.remark.isNotEmpty;
+      }
+      if (filterWithoutRemarkOnly) {
+        matchesRemark = card.remark.isEmpty;
+      }
+
+      if (!matchesQuery || !matchesFlag || !matchesRemark) {
         continue;
       }
 
@@ -1040,6 +1060,83 @@ class SearchManager extends ChangeNotifier {
       _isPinned = false;
       notifyListeners();
     }
+  }
+
+  void showSearchDialog(
+    BuildContext context,
+    List<Flashcard> cards,
+    void Function(int) onSelected,
+  ) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('search'.tr()),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: controller,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: 'search'.tr(),
+                        prefixIcon: const Icon(Icons.search),
+                      ),
+                      onChanged: (value) => setDialogState(() {}),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 200,
+                      width: double.maxFinite,
+                      child: ListView.builder(
+                        itemCount: cards.length,
+                        itemBuilder: (context, index) {
+                          final card = cards[index];
+                          final query = controller.text.toLowerCase();
+                          if (query.isNotEmpty &&
+                              !card.front.toLowerCase().contains(query) &&
+                              !card.back.toLowerCase().contains(query) &&
+                              !card.key.toLowerCase().contains(query)) {
+                            return const SizedBox.shrink();
+                          }
+                          return ListTile(
+                            title: Text(
+                              card.front,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              card.back,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () {
+                              onSelected(index);
+                              Navigator.of(context).pop();
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text('cancel'.tr()),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 }
 

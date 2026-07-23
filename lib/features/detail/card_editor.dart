@@ -4,12 +4,14 @@ import 'package:bivium/models/flashcard.dart';
 import 'package:bivium/models/glossary_item.dart';
 import 'package:bivium/services/google_drive_service.dart';
 import 'package:bivium/core/theme.dart';
+import 'package:bivium/core/responsive.dart';
 import 'package:bivium/features/editor/text_editor.dart';
 import 'package:bivium/features/detail/remark_page.dart';
 import 'package:bivium/features/detail/remark_setting_page.dart';
 import 'package:bivium/features/home/widgets/editor_settings_panel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bivium/models/substitution.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class CardEditor extends StatefulWidget {
   final Flashcard card;
@@ -160,6 +162,8 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool isDesktop = Responsive.isDesktop(context);
+    final effectiveIsVertical = isDesktop ? false : widget.isVertical;
 
     return Container(
       margin: const EdgeInsets.fromLTRB(10, 5, 10, 5),
@@ -175,7 +179,7 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
         ),
       ),
       child: Flex(
-        direction: widget.isVertical ? Axis.vertical : Axis.horizontal,
+        direction: effectiveIsVertical ? Axis.vertical : Axis.horizontal,
         children: [
           Expanded(
             child: TextEditor(
@@ -191,7 +195,7 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
               onGlossaryLongPress: _showGlossaryFeedback,
             ),
           ),
-          _buildMiddleToolbar(isDark),
+          _buildMiddleToolbar(isDark, isDesktop),
           Expanded(
             child: TextEditor(
               controller: _backController,
@@ -211,22 +215,19 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildMiddleToolbar(bool isDark) {
+  Widget _buildMiddleToolbar(bool isDark, bool isDesktop) {
     final bool isKeyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
-    if (isKeyboardOpen) {
+    if (isKeyboardOpen && !isDesktop) {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => FocusScope.of(context).unfocus(),
         child: Container(
           // 터치가 잘 되도록 보이지 않는 여백 확보
-          padding: EdgeInsets.symmetric(
-            vertical: widget.isVertical ? 10 : 0,
-            horizontal: widget.isVertical ? 0 : 10,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           child: Container(
-            width: widget.isVertical ? double.infinity : 1,
-            height: widget.isVertical ? 1 : double.infinity,
+            width: double.infinity,
+            height: 1,
             color: isDark ? Colors.white10 : Colors.black12,
           ),
         ),
@@ -234,7 +235,7 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
     }
 
     final bool isEffectivelyExpanded =
-        _isToolbarExpanded || _glossaryFeedback != null;
+        _isToolbarExpanded || _glossaryFeedback != null || isDesktop;
 
     return Stack(
       alignment: Alignment.center,
@@ -244,24 +245,26 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
           behavior: HitTestBehavior.opaque,
           onTap: () => FocusScope.of(context).unfocus(),
           child: Container(
-            width: widget.isVertical ? double.infinity : 1,
-            height: widget.isVertical ? 1 : double.infinity,
+            width: double.infinity,
+            height: 1,
             color: isDark ? Colors.white10 : Colors.black12,
           ),
         ),
         AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.fastOutSlowIn,
-          width: isEffectivelyExpanded
-              ? MediaQuery.of(context).size.width * 0.8
-              : 80,
-          height: isEffectivelyExpanded ? 44 : 32,
+          width: isDesktop
+              ? 44
+              : (isEffectivelyExpanded
+                    ? MediaQuery.of(context).size.width * 0.8
+                    : 80),
+          height: isDesktop ? 220 : (isEffectivelyExpanded ? 44 : 32),
           decoration: BoxDecoration(
             color: isEffectivelyExpanded
                 ? (isDark ? AppColors.cDarkSurface : Colors.white)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(
-              isEffectivelyExpanded ? 22 : 16,
+              isDesktop ? 22 : (isEffectivelyExpanded ? 22 : 16),
             ),
             boxShadow: isEffectivelyExpanded
                 ? [
@@ -281,12 +284,14 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
                 : null,
           ),
           child: InkWell(
-            onTap: () {
-              FocusScope.of(context).unfocus();
-              if (!_isToolbarExpanded) {
-                setState(() => _isToolbarExpanded = true);
-              }
-            },
+            onTap: isDesktop
+                ? null
+                : () {
+                    FocusScope.of(context).unfocus();
+                    if (!_isToolbarExpanded) {
+                      setState(() => _isToolbarExpanded = true);
+                    }
+                  },
             borderRadius: BorderRadius.circular(
               isEffectivelyExpanded ? 22 : 16,
             ),
@@ -323,8 +328,9 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
                         ),
                       ),
                     )
-                  : _isToolbarExpanded
-                  ? Row(
+                  : (isEffectivelyExpanded || isDesktop)
+                  ? Flex(
+                      direction: isDesktop ? Axis.vertical : Axis.horizontal,
                       key: const ValueKey('toolbar_actions'),
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
@@ -337,6 +343,7 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
                             FocusScope.of(context).unfocus();
                             _handleRemarkAction();
                           },
+                          tooltip: "remark".tr(),
                         ),
                         _toolbarAction(
                           icon: widget.card.isFlagged
@@ -352,33 +359,40 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
                                   !widget.card.isFlagged,
                             );
                           },
+                          tooltip: "flag".tr(),
                         ),
-                        _toolbarAction(
-                          icon: Icons.view_agenda_rounded,
-                          color: isDark ? AppColors.cSlate400 : Colors.grey,
-                          onTap: () {
-                            FocusScope.of(context).unfocus();
-                            widget.onLayoutToggle();
-                          },
-                          isVerticalIcon: true,
-                        ),
+                        if (!isDesktop)
+                          _toolbarAction(
+                            icon: Icons.view_agenda_rounded,
+                            color: isDark ? AppColors.cSlate400 : Colors.grey,
+                            onTap: () {
+                              FocusScope.of(context).unfocus();
+                              widget.onLayoutToggle();
+                            },
+                            isVerticalIcon: true,
+                            tooltip: "toggle_layout".tr(),
+                          ),
                         _toolbarAction(
                           icon: Icons.more_vert_rounded,
                           color: isDark ? AppColors.cSlate400 : Colors.grey,
                           onTap: () {
                             FocusScope.of(context).unfocus();
-                            setState(() => _isToolbarExpanded = false);
+                            if (!isDesktop) {
+                              setState(() => _isToolbarExpanded = false);
+                            }
                             widget.onSettingsToggle();
                           },
+                          tooltip: "settings".tr(),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 16),
-                          color: isDark
-                              ? AppColors.cSlate600
-                              : Colors.grey.withValues(alpha: 0.5),
-                          onPressed: () =>
-                              setState(() => _isToolbarExpanded = false),
-                        ),
+                        if (!isDesktop)
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 16),
+                            color: isDark
+                                ? AppColors.cSlate600
+                                : Colors.grey.withValues(alpha: 0.5),
+                            onPressed: () =>
+                                setState(() => _isToolbarExpanded = false),
+                          ),
                       ],
                     )
                   : Center(
@@ -404,8 +418,9 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
     required Color color,
     VoidCallback? onTap,
     bool isVerticalIcon = false,
+    String? tooltip,
   }) {
-    return IconButton(
+    final button = IconButton(
       visualDensity: VisualDensity.compact,
       onPressed: onTap,
       icon: isVerticalIcon
@@ -415,6 +430,11 @@ class _CardEditorState extends State<CardEditor> with WidgetsBindingObserver {
             )
           : Icon(icon, size: 20, color: color),
     );
+
+    if (tooltip != null && Responsive.isDesktop(context)) {
+      return Tooltip(message: tooltip, child: button);
+    }
+    return button;
   }
 
   Future<void> _handleRemarkAction() async {

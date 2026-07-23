@@ -3,6 +3,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme.dart';
+import '../../core/responsive.dart';
 import '../../models/flashcard.dart';
 import '../../services/google_drive_service.dart';
 import '../home/edit_project_page.dart';
@@ -39,6 +40,8 @@ class _DetailPageState extends State<DetailPage> {
   bool isExpanded = false;
   int _currentIndex = 0;
   int _currentCardPageIndex = 0;
+  bool _isOffline = false;
+  bool _hasUnsavedChanges = false;
 
   final PageController _pageController = PageController();
 
@@ -55,6 +58,34 @@ class _DetailPageState extends State<DetailPage> {
     super.dispose();
   }
 
+  /// 캐시 키 생성
+  String get _cacheKey => 'cached_cards_${widget.setInfo.id}';
+
+  /// 로컬 캐시에 저장
+  void _saveToCache(List<Flashcard> cards) {
+    try {
+      final List<Map<String, dynamic>> jsonList = cards
+          .map(
+            (c) => {
+              'key': c.key,
+              'front': c.front,
+              'back': c.back,
+              'remark': c.remark,
+              'isFlagged': c.isFlagged,
+              'groupDepth': c.groupDepth,
+              'isCollapsed': c.isCollapsed,
+              'groupStartIndex': c.groupStartIndex,
+              'groupEndIndex': c.groupEndIndex,
+              'controlGroupDepth': c.controlGroupDepth,
+            },
+          )
+          .toList();
+      widget.prefs.setString(_cacheKey, jsonList.toString());
+    } catch (e) {
+      debugPrint('캐시 저장 실패: $e');
+    }
+  }
+
   Future<void> _fetchInitialData() async {
     if (!mounted) return;
     setState(() => isLoading = true);
@@ -68,17 +99,60 @@ class _DetailPageState extends State<DetailPage> {
         setState(() {
           cards = latest;
           isLoading = false;
+          _isOffline = false;
+          _hasUnsavedChanges = false;
         });
+        _saveToCache(latest);
       }
     } catch (e) {
       debugPrint('${'data_load_failed'.tr()}: $e');
-      if (mounted) setState(() => isLoading = false);
+      // 네트워크 오류 시 캐시된 데이터 사용
+      if (mounted) {
+        setState(() {
+          _isOffline = true;
+          isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('offline_mode'.tr()),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
-  // --- 복원 로직 ---
+  /// 변경사항을 Google Sheets에 동기화 (자동 저장)
+  Future<void> _syncChanges() async {
+    if (_isOffline || !_hasUnsavedChanges) return;
+    try {
+      await widget.driveService.syncCards(
+        spreadsheetId: widget.setInfo.sheetId,
+        setInfo: widget.setInfo,
+        cards: cards,
+      );
+      if (mounted) {
+        setState(() => _hasUnsavedChanges = false);
+      }
+    } catch (e) {
+      debugPrint('동기화 실패: $e');
+      if (mounted) {
+        setState(() => _isOffline = true);
+      }
+    }
+  }
 
-  // --- 복원 로직 ---
+  /// 카드 업데이트 핸들러 (변경 시 자동 저장 + 캐시)
+  void _onCardsUpdated(List<Flashcard> updatedList, int lastIndex) {
+    setState(() {
+      cards = updatedList;
+      _currentCardPageIndex = lastIndex;
+      _hasUnsavedChanges = true;
+    });
+    _saveToCache(updatedList);
+    _syncChanges();
+  }
 
   /// 메타데이터 존재 여부 확인
   bool _hasExportMetadata() {
@@ -317,6 +391,7 @@ class _DetailPageState extends State<DetailPage> {
     final Color bgColor = isDark ? AppColors.cDarkBg : AppColors.cBg;
     final Color textColor = isDark ? Colors.white : AppColors.cSlate900;
     final Color subTextColor = isDark ? Colors.white70 : AppColors.cSlate600;
+    final bool isDesktop = Responsive.isDesktop(context);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -357,186 +432,314 @@ class _DetailPageState extends State<DetailPage> {
               icon: const Icon(Icons.ios_share_rounded, size: 20),
               onPressed: _handleExport,
               color: AppColors.cBrand600,
+              tooltip: "export_preview".tr(),
+            ),
+          // 오프라인/동기화 상태 아이콘
+          if (_isOffline)
+            IconButton(
+              icon: const Icon(Icons.wifi_off_rounded, size: 20),
+              onPressed: null,
+              color: Colors.orange,
+              tooltip: "offline_mode".tr(),
+            )
+          else if (_hasUnsavedChanges)
+            IconButton(
+              icon: const Icon(Icons.sync_problem_rounded, size: 20),
+              onPressed: _syncChanges,
+              color: AppColors.cBrand600,
+              tooltip: "sync_pending".tr(),
             ),
           IconButton(
             icon: const Icon(Icons.sync),
             onPressed: _fetchInitialData,
             color: AppColors.cBrand600,
+            tooltip: "refresh".tr(),
           ),
         ],
       ),
-      body: Column(
+      body: Row(
         children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            height: isExpanded ? 130 : 0,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.03)
-                  : Colors.black.withValues(alpha: 0.02),
-              border: Border(
-                bottom: BorderSide(
-                  color: isExpanded
-                      ? (isDark ? Colors.white10 : Colors.black12)
-                      : Colors.transparent,
-                ),
+          if (isDesktop)
+            NavigationRail(
+              selectedIndex: _currentIndex,
+              onDestinationSelected: _onTabTapped,
+              labelType: NavigationRailLabelType.all,
+              backgroundColor: bgColor,
+              selectedIconTheme: const IconThemeData(
+                color: AppColors.cBrand600,
               ),
-            ),
-            child: SingleChildScrollView(
-              physics: const NeverScrollableScrollPhysics(),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 16,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          if (widget.setInfo.description.isNotEmpty) {
-                            _showFullDescription(context, textColor, bgColor);
-                          }
-                        },
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'description_label'.tr(),
-                              style: const TextStyle(
-                                color: AppColors.cBrand600,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              widget.setInfo.description.isEmpty
-                                  ? 'no_description_msg'.tr()
-                                  : widget.setInfo.description,
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 13,
-                                height: 1.5,
-                              ),
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Transform.translate(
-                      offset: const Offset(24, -19),
-                      child: IconButton(
-                        icon: Icon(
-                          Icons.settings_outlined,
-                          size: 20,
-                          color: subTextColor.withValues(alpha: 0.6),
-                        ),
-                        onPressed: () async {
-                          await Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => EditProjectPage(
-                                set: widget.setInfo,
-                                allTitles: widget.allTitles,
-                                onUpdate: (newTitle, newDescription) {
-                                  setState(() {
-                                    widget.setInfo.title = newTitle;
-                                    widget.setInfo.description = newDescription;
-                                  });
-                                  widget.onUpdate();
-                                },
-                                onDelete: widget.onDelete,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
+              unselectedIconTheme: IconThemeData(
+                color: isDark ? Colors.white38 : Colors.black38,
               ),
+              selectedLabelTextStyle: const TextStyle(
+                color: AppColors.cBrand600,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+              unselectedLabelTextStyle: TextStyle(
+                color: isDark ? Colors.white38 : Colors.black38,
+                fontSize: 12,
+              ),
+              destinations: [
+                NavigationRailDestination(
+                  icon: const Icon(Icons.list_alt_rounded),
+                  label: Text('items_tab'.tr()),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.analytics_outlined),
+                  label: Text('stats_tab'.tr()),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.auto_stories_outlined),
+                  label: Text('glossary_tab'.tr()),
+                ),
+              ],
             ),
-          ),
+          if (isDesktop) const VerticalDivider(thickness: 1, width: 1),
           Expanded(
-            child: Stack(
+            child: Column(
               children: [
-                PageView(
-                  controller: _pageController,
-                  onPageChanged: (index) =>
-                      setState(() => _currentIndex = index),
-                  children: [
-                    ItemsTab(
-                      cards: cards,
-                      currentPageIndex: _currentCardPageIndex,
-                      onCardSelected: (index) =>
-                          setState(() => _currentCardPageIndex = index),
-                      onCardsUpdated: (updatedList, lastIndex) {
-                        setState(() {
-                          cards = updatedList;
-                          _currentCardPageIndex = lastIndex;
-                        });
-                      },
-                      onSetUpdated: () {
-                        widget.onUpdate();
-                        _fetchInitialData();
-                      },
-                      setInfo: widget.setInfo,
-                      driveService: widget.driveService,
-                    ),
-                    StatisticsTab(
-                      cards: cards,
-                      setInfo: widget.setInfo,
-                      onCardTap: _navigateToCard,
-                    ),
-                    GlossaryTab(
-                      cards: cards,
-                      setInfo: widget.setInfo,
-                      prefs: widget.prefs,
-                      onUpdate: widget.onUpdate,
-                    ),
-                  ],
-                ),
-                if (isLoading)
-                  Container(
-                    color: bgColor,
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.cBrand600,
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  height: isExpanded ? 130 : 0,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.03)
+                        : Colors.black.withValues(alpha: 0.02),
+                    border: Border(
+                      bottom: BorderSide(
+                        color: isExpanded
+                            ? (isDark ? Colors.white10 : Colors.black12)
+                            : Colors.transparent,
                       ),
                     ),
                   ),
+                  child: SingleChildScrollView(
+                    physics: const NeverScrollableScrollPhysics(),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: Responsive.maxContentWidth,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () {
+                                    if (widget.setInfo.description.isNotEmpty) {
+                                      _showFullDescription(
+                                        context,
+                                        textColor,
+                                        bgColor,
+                                      );
+                                    }
+                                  },
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'description_label'.tr(),
+                                        style: const TextStyle(
+                                          color: AppColors.cBrand600,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        widget.setInfo.description.isEmpty
+                                            ? 'no_description_msg'.tr()
+                                            : widget.setInfo.description,
+                                        style: TextStyle(
+                                          color: textColor,
+                                          fontSize: 13,
+                                          height: 1.5,
+                                        ),
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              Transform.translate(
+                                offset: const Offset(24, -19),
+                                child: IconButton(
+                                  icon: Icon(
+                                    Icons.settings_outlined,
+                                    size: 20,
+                                    color: subTextColor.withValues(alpha: 0.6),
+                                  ),
+                                  onPressed: () async {
+                                    await Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (context) => EditProjectPage(
+                                          set: widget.setInfo,
+                                          allTitles: widget.allTitles,
+                                          onUpdate: (newTitle, newDescription) {
+                                            setState(() {
+                                              widget.setInfo.title = newTitle;
+                                              widget.setInfo.description =
+                                                  newDescription;
+                                            });
+                                            widget.onUpdate();
+                                          },
+                                          onDelete: widget.onDelete,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      PageView(
+                        controller: _pageController,
+                        physics: isDesktop
+                            ? const NeverScrollableScrollPhysics()
+                            : null,
+                        onPageChanged: (index) =>
+                            setState(() => _currentIndex = index),
+                        children: [
+                          ItemsTab(
+                            cards: cards,
+                            currentPageIndex: _currentCardPageIndex,
+                            onCardSelected: (index) =>
+                                setState(() => _currentCardPageIndex = index),
+                            onCardsUpdated: _onCardsUpdated,
+                            onSetUpdated: () {
+                              widget.onUpdate();
+                              _fetchInitialData();
+                            },
+                            setInfo: widget.setInfo,
+                            driveService: widget.driveService,
+                          ),
+                          StatisticsTab(
+                            cards: cards,
+                            setInfo: widget.setInfo,
+                            onCardTap: _navigateToCard,
+                          ),
+                          GlossaryTab(
+                            cards: cards,
+                            setInfo: widget.setInfo,
+                            prefs: widget.prefs,
+                            onUpdate: widget.onUpdate,
+                          ),
+                        ],
+                      ),
+                      if (isLoading)
+                        Container(
+                          color: bgColor,
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.cBrand600,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (isDesktop) _buildStatusBar(isDark),
               ],
             ),
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: _onTabTapped,
-        backgroundColor: bgColor,
-        selectedItemColor: AppColors.cBrand600,
-        unselectedItemColor: isDark ? Colors.white38 : Colors.black38,
-        type: BottomNavigationBarType.fixed,
-        items: [
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.list_alt_rounded),
-            label: 'items_tab'.tr(),
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.analytics_outlined),
-            label: 'stats_tab'.tr(),
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.auto_stories_outlined),
-            label: 'glossary_tab'.tr(),
-          ),
+      bottomNavigationBar: isDesktop
+          ? null
+          : BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: _onTabTapped,
+              backgroundColor: bgColor,
+              selectedItemColor: AppColors.cBrand600,
+              unselectedItemColor: isDark ? Colors.white38 : Colors.black38,
+              type: BottomNavigationBarType.fixed,
+              items: [
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.list_alt_rounded),
+                  label: 'items_tab'.tr(),
+                ),
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.analytics_outlined),
+                  label: 'stats_tab'.tr(),
+                ),
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.auto_stories_outlined),
+                  label: 'glossary_tab'.tr(),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildStatusBar(bool isDark) {
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cDarkSurface : AppColors.cSlate50,
+        border: Border(
+          top: BorderSide(color: isDark ? Colors.white10 : Colors.black12),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (_isOffline)
+            Row(
+              children: [
+                Icon(Icons.wifi_off_rounded, size: 14, color: Colors.orange),
+                const SizedBox(width: 4),
+                Text(
+                  "offline_mode".tr(),
+                  style: TextStyle(fontSize: 11, color: Colors.orange),
+                ),
+                const SizedBox(width: 16),
+              ],
+            ),
+          if (_hasUnsavedChanges && !_isOffline)
+            Row(
+              children: [
+                Icon(
+                  Icons.sync_problem_rounded,
+                  size: 14,
+                  color: AppColors.cBrand600,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  "unsaved_changes".tr(),
+                  style: TextStyle(fontSize: 11, color: AppColors.cBrand600),
+                ),
+                const SizedBox(width: 16),
+              ],
+            ),
+          const Spacer(),
+          if (_currentIndex == 0)
+            Text(
+              "Current: ${_currentCardPageIndex + 1} / ${cards.length}",
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark ? AppColors.cSlate400 : AppColors.cSlate600,
+              ),
+            ),
         ],
       ),
     );
