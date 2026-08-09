@@ -1,0 +1,26 @@
+{
+  "name": "Bivium Flutter",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+
+
+  "containerEnv": {
+    "ANDROID_HOME": "/opt/android-sdk",
+    "ANDROID_SDK_ROOT": "/opt/android-sdk"
+  },
+
+  "forwardPorts": [8080],
+
+  "postCreateCommand": "flutter pub get",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Dart-Code.flutter",
+        "Dart-Code.dart-code"
+      ]
+    }
+  }
+}
